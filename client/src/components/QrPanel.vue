@@ -18,7 +18,7 @@ defineProps<{
       v-if="qr?.imageSrc"
       :src="qr.imageSrc"
       alt="QR Code para conectar o WhatsApp"
-      class="mt-4 h-56 w-56 rounded-lg bg-white object-contain"
+      class="mx-auto mt-4 block h-56 w-56 rounded-lg bg-white object-contain"
     />
     <p v-else class="mt-4 text-sm text-zinc-600">
       Aguardando o QR Code da instância.

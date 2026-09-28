@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import BrandMark from "@/components/BrandMark.vue";
 import QrPanel from "@/components/QrPanel.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import { STATUS_POLL_INTERVAL_MS } from "@/constants";
+import { pairingPhoneError } from "@/pairing-phone";
 import { useInstanceStore } from "@/stores/instance-store";
 import { useSessionStore } from "@/stores/session-store";
 
@@ -12,6 +13,7 @@ const instance = useInstanceStore();
 const session = useSessionStore();
 const router = useRouter();
 const pairPhone = ref("");
+const pairPhoneError = computed(() => pairingPhoneError(pairPhone.value));
 const confirmDisconnect = ref(false);
 const copyMessage = ref("");
 const disconnectNotice = ref("");
@@ -90,6 +92,9 @@ function startConnect(): void {
 }
 
 function startPair(): void {
+  if (pairPhoneError.value !== null || pairPhone.value.trim().length === 0) {
+    return;
+  }
   disconnectNotice.value = "";
   void instance.pair(pairPhone.value);
 }
@@ -114,19 +119,33 @@ async function copyPairingCode(): Promise<void> {
 
 <template>
   <main class="mx-auto flex min-h-screen max-w-lg flex-col px-6 py-10">
-    <header class="flex items-start justify-between gap-4">
-      <div class="flex items-center gap-3">
-        <BrandMark size="sm" />
+    <header class="flex flex-col items-center gap-4">
+      <BrandMark />
+      <div
+        v-if="instance.statusChecked && instance.status?.loggedIn"
+        class="flex flex-col items-center gap-3 text-center"
+      >
+        <h1 class="text-3xl font-semibold text-zinc-900">
+          {{ instance.status?.name || "Instância" }}
+        </h1>
+        <StatusBadge
+          :checking="false"
+          :failed="false"
+          :logged-in="true"
+          :connected="instance.status?.connected ?? false"
+        />
+      </div>
+      <div v-else class="flex w-full items-start justify-between gap-4">
         <h1 class="text-2xl font-semibold text-zinc-900">
           {{ instance.status?.name || "Instância" }}
         </h1>
+        <StatusBadge
+          :checking="instance.statusLoading || !instance.statusChecked"
+          :failed="instance.statusFailed && instance.status === null"
+          :logged-in="instance.status?.loggedIn ?? false"
+          :connected="instance.status?.connected ?? false"
+        />
       </div>
-      <StatusBadge
-        :checking="instance.statusLoading || !instance.statusChecked"
-        :failed="instance.statusFailed && instance.status === null"
-        :logged-in="instance.status?.loggedIn ?? false"
-        :connected="instance.status?.connected ?? false"
-      />
     </header>
 
     <p
@@ -169,11 +188,8 @@ async function copyPairingCode(): Promise<void> {
 
     <section
       v-else-if="instance.statusChecked && instance.status?.loggedIn"
-      class="mt-8 space-y-4"
+      class="mt-10"
     >
-      <p class="text-sm leading-6 text-zinc-600">
-        Este WhatsApp já está conectado nesta instância.
-      </p>
       <div v-if="confirmDisconnect" class="space-y-3">
         <p class="text-sm text-zinc-800">
           Desconectar o WhatsApp? A instância continua existindo.
@@ -203,7 +219,7 @@ async function copyPairingCode(): Promise<void> {
       <button
         v-else
         type="button"
-        class="min-h-11 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-800 disabled:opacity-60"
+        class="min-h-11 text-sm text-zinc-500 disabled:opacity-60"
         :disabled="instance.busy"
         @click="confirmDisconnect = true"
       >
@@ -228,7 +244,7 @@ async function copyPairingCode(): Promise<void> {
       </section>
 
       <QrPanel
-        v-if="instance.phase === 'awaiting_qr'"
+        v-if="instance.phase === 'awaiting_qr' && !instance.pairingCode"
         class="mt-8"
         :qr="instance.qr"
       />
@@ -237,31 +253,48 @@ async function copyPairingCode(): Promise<void> {
         <h2 class="text-sm font-medium text-zinc-800">
           <label for="pair-phone">Parear com número de telefone</label>
         </h2>
-        <p class="text-sm leading-6 text-zinc-600">
-          No celular: WhatsApp, Aparelhos conectados, Conectar com número de
-          telefone.
-        </p>
         <input
           id="pair-phone"
           v-model="pairPhone"
           inputmode="tel"
           autocomplete="off"
           placeholder="5581999999999"
+          aria-describedby="pair-phone-error"
           class="min-h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none ring-emerald-600 focus:ring-2"
         />
+        <p
+          v-if="pairPhoneError"
+          id="pair-phone-error"
+          class="text-sm text-red-700"
+          role="alert"
+        >
+          {{ pairPhoneError }}
+        </p>
         <button
           type="button"
           class="min-h-11 rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-800 disabled:opacity-60"
-          :disabled="instance.busy || pairPhone.trim().length === 0"
+          :disabled="
+            instance.busy ||
+            pairPhone.trim().length === 0 ||
+            pairPhoneError !== null
+          "
           @click="startPair"
         >
           {{
-            instance.busyAction === "pair" ? "Gerando código…" : "Gerar código"
+            instance.busyAction === "pair"
+              ? "Gerando código…"
+              : instance.pairingCode
+                ? "Gerar outro código"
+                : "Gerar código"
           }}
         </button>
         <div v-if="instance.pairingCode" class="space-y-2">
           <p class="font-mono text-2xl tracking-widest text-zinc-900">
             {{ instance.pairingCode }}
+          </p>
+          <p class="text-sm leading-6 text-zinc-600">
+            Digite este código agora no celular: WhatsApp, Aparelhos
+            conectados, Conectar com número de telefone. Ele expira rápido.
           </p>
           <button
             type="button"

@@ -34,8 +34,8 @@ async function submit(): Promise<void> {
   <main
     class="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12"
   >
-    <BrandMark />
-    <h1 class="mt-4 text-3xl font-semibold text-zinc-900">
+    <BrandMark class="self-center" />
+    <h1 class="mt-4 text-center text-3xl font-semibold text-zinc-900">
       Conectar instância
     </h1>
     <p class="mt-3 text-sm leading-6 text-zinc-600">
