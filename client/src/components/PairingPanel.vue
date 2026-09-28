@@ -14,10 +14,12 @@ const props = defineProps<{
   copyMessage: string;
   busy: boolean;
   generating: boolean;
+  secondsLeft: number | null;
 }>();
 
 const emit = defineEmits<{
   "update:phone": [value: string];
+  blur: [];
   pair: [];
   copy: [];
 }>();
@@ -54,6 +56,7 @@ function onPhoneInput(event: Event): void {
       :aria-invalid="phoneError !== null"
       class="min-h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none ring-emerald-600 focus:ring-2"
       @input="onPhoneInput"
+      @blur="emit('blur')"
     />
     <p
       v-if="phoneError"
@@ -84,9 +87,22 @@ function onPhoneInput(event: Event): void {
       >
         {{ formatPairingCode(pairingCode) }}
       </p>
+      <p
+        v-if="secondsLeft !== null"
+        data-testid="pair-countdown"
+        class="text-sm text-zinc-600"
+        role="status"
+        aria-live="polite"
+      >
+        {{
+          secondsLeft > 0
+            ? `Válido por ${secondsLeft}s`
+            : "O código expirou. Gere outro."
+        }}
+      </p>
       <p class="text-sm leading-6 text-zinc-600">
         Digite este código agora no celular: WhatsApp, Aparelhos conectados,
-        Conectar com número de telefone. Ele expira rápido.
+        Conectar com número de telefone.
       </p>
       <button
         type="button"

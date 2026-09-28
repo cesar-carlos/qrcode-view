@@ -34,16 +34,21 @@ const emit = defineEmits<{
         <path d="M5 13l4 4L19 7" />
       </svg>
     </div>
-    <h1 class="mt-4 text-2xl font-semibold text-zinc-900">
+    <h1
+      v-if="instanceName.trim().length > 0"
+      class="mt-4 text-2xl font-semibold text-zinc-900"
+    >
       {{ instanceName }}
     </h1>
-    <p
-      class="mt-2 text-lg font-semibold text-emerald-800"
+    <component
+      :is="instanceName.trim().length > 0 ? 'p' : 'h1'"
+      class="font-semibold text-emerald-800"
+      :class="instanceName.trim().length > 0 ? 'mt-2 text-lg' : 'mt-4 text-2xl'"
       role="status"
       aria-live="polite"
     >
       WhatsApp conectado
-    </p>
+    </component>
     <p class="mx-auto mt-2 max-w-sm text-base leading-7 text-zinc-600">
       A conexão foi concluída. Esta instância está logada e pronta para uso.
       Pode fechar esta página.

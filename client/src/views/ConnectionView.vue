@@ -9,6 +9,7 @@ import ReconnectPanel from "@/components/ReconnectPanel.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import SuccessPanel from "@/components/SuccessPanel.vue";
 import {
+  PAIRING_CODE_LIFETIME_MS,
   QR_FIRST_LIFETIME_MS,
   QR_LIFETIME_MS,
   STATUS_POLL_INTERVAL_MS,
@@ -23,14 +24,21 @@ const session = useSessionStore();
 const router = useRouter();
 const isNarrow = useNarrowViewport();
 const pairPhone = ref("");
-const pairPhoneError = computed(() => pairingPhoneError(pairPhone.value));
+const pairPhoneChecked = ref(false);
+const pairPhoneError = computed(() =>
+  pairPhoneChecked.value ? pairingPhoneError(pairPhone.value) : null,
+);
 const confirmDisconnect = ref(false);
 const copyMessage = ref("");
 const disconnectNotice = ref("");
 const secondsLeft = ref<number | null>(null);
+const pairSecondsLeft = ref<number | null>(null);
 const skipAutoConnect = ref(false);
 const didAutoConnect = ref(false);
-const instanceName = computed(() => instance.status?.name || "Instância");
+const instanceName = computed(
+  () => instance.status?.name?.trim() || "Instância",
+);
+const connectedName = computed(() => instance.status?.name?.trim() ?? "");
 const showStatusFailure = computed(
   () =>
     instance.statusChecked && instance.statusFailed && instance.status === null,
@@ -51,6 +59,7 @@ let pollTimer: ReturnType<typeof setInterval> | null = null;
 let tickTimer: ReturnType<typeof setInterval> | null = null;
 let qrWindow: "first" | "later" = "first";
 let qrRefreshInFlight = false;
+let pairTickTimer: ReturnType<typeof setInterval> | null = null;
 
 function stopPolling(): void {
   if (pollTimer !== null) {
@@ -179,12 +188,33 @@ onMounted(() => {
   void instance.refreshStatus();
 });
 
+function stopPairCountdown(): void {
+  if (pairTickTimer !== null) {
+    clearInterval(pairTickTimer);
+    pairTickTimer = null;
+  }
+  pairSecondsLeft.value = null;
+}
+
+function startPairCountdown(): void {
+  stopPairCountdown();
+  pairSecondsLeft.value = Math.floor(PAIRING_CODE_LIFETIME_MS / 1000);
+  pairTickTimer = setInterval(() => {
+    if (pairSecondsLeft.value === null || pairSecondsLeft.value <= 0) {
+      return;
+    }
+    pairSecondsLeft.value -= 1;
+  }, 1000);
+}
+
 onUnmounted(() => {
   stopPolling();
+  stopPairCountdown();
 });
 
 async function leave(): Promise<void> {
   stopPolling();
+  stopPairCountdown();
   instance.reset();
   await session.signOut();
   await router.push({ name: "token" });
@@ -217,13 +247,23 @@ function updateQr(): void {
   });
 }
 
-function startPair(): void {
+function markPairPhoneChecked(): void {
+  if (pairPhone.value.trim().length > 0) {
+    pairPhoneChecked.value = true;
+  }
+}
+
+async function startPair(): Promise<void> {
+  pairPhoneChecked.value = true;
   const phone = normalizePairingPhone(pairPhone.value);
   if (phone === null) {
     return;
   }
   disconnectNotice.value = "";
-  void instance.pair(phone);
+  await instance.pair(phone);
+  if (instance.errorMessage === "" && instance.pairingCode !== null) {
+    startPairCountdown();
+  }
 }
 
 function startReconnect(): void {
@@ -328,7 +368,7 @@ async function copyPairingCode(): Promise<void> {
 
     <SuccessPanel
       v-else-if="instance.statusChecked && instance.status?.loggedIn"
-      :instance-name="instanceName"
+      :instance-name="connectedName"
       :confirm-disconnect="confirmDisconnect"
       :busy="instance.busy"
       :disconnecting="instance.busyAction === 'disconnect'"
@@ -351,7 +391,9 @@ async function copyPairingCode(): Promise<void> {
         :copy-message="copyMessage"
         :busy="instance.busy"
         :generating="instance.busyAction === 'pair'"
+        :seconds-left="pairSecondsLeft"
         @update:phone="pairPhone = $event"
+        @blur="markPairPhoneChecked"
         @pair="startPair"
         @copy="copyPairingCode"
       />
@@ -374,6 +416,7 @@ async function copyPairingCode(): Promise<void> {
           :qr="instance.qr"
           :refreshing="instance.qrRefreshing"
           :seconds-left="secondsLeft"
+          :opened-on-phone="isNarrow"
           @refresh="updateQr"
         />
       </template>
@@ -405,6 +448,7 @@ async function copyPairingCode(): Promise<void> {
                 :qr="instance.qr"
                 :refreshing="instance.qrRefreshing"
                 :seconds-left="secondsLeft"
+                :opened-on-phone="isNarrow"
                 @refresh="updateQr"
               />
             </section>
@@ -422,7 +466,9 @@ async function copyPairingCode(): Promise<void> {
               :copy-message="copyMessage"
               :busy="instance.busy"
               :generating="instance.busyAction === 'pair'"
+              :seconds-left="pairSecondsLeft"
               @update:phone="pairPhone = $event"
+              @blur="markPairPhoneChecked"
               @pair="startPair"
               @copy="copyPairingCode"
             />

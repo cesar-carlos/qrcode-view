@@ -6,6 +6,7 @@ const props = defineProps<{
   qr: QrCode | null;
   refreshing: boolean;
   secondsLeft: number | null;
+  openedOnPhone: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -45,8 +46,13 @@ onUnmounted(() => {
       Aponte a câmera do WhatsApp
     </h2>
     <p class="mt-1 text-sm leading-6 text-zinc-600">
-      No celular: WhatsApp, Aparelhos conectados, Conectar aparelho. Abra esta
-      tela no computador para escanear.
+      <template v-if="openedOnPhone">
+        Esta tela está no celular. Abra a mesma página em outro aparelho e
+        aponte a câmera do WhatsApp para o QR Code.
+      </template>
+      <template v-else>
+        No celular: WhatsApp, Aparelhos conectados, Conectar aparelho.
+      </template>
     </p>
     <img
       v-if="qr?.imageSrc"

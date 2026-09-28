@@ -3,7 +3,12 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { ApiError } from "@/api/http";
-import { getQrCode, getStatus, connectInstance } from "@/api/instance-api";
+import {
+  connectInstance,
+  getQrCode,
+  getStatus,
+  pairInstance,
+} from "@/api/instance-api";
 import { useSessionStore } from "@/stores/session-store";
 import ConnectionView from "./ConnectionView.vue";
 import TokenView from "./TokenView.vue";
@@ -31,6 +36,7 @@ vi.mock("@/api/instance-api", () => ({
 const getStatusMock = vi.mocked(getStatus);
 const connectInstanceMock = vi.mocked(connectInstance);
 const getQrCodeMock = vi.mocked(getQrCode);
+const pairInstanceMock = vi.mocked(pairInstance);
 
 function mockMatchMedia(matches: boolean): void {
   Object.defineProperty(window, "matchMedia", {
@@ -79,6 +85,7 @@ describe("ConnectionView", () => {
     getStatusMock.mockReset();
     connectInstanceMock.mockClear();
     getQrCodeMock.mockClear();
+    pairInstanceMock.mockReset();
   });
 
   afterEach(() => {
@@ -110,6 +117,20 @@ describe("ConnectionView", () => {
     expect(connectInstanceMock).not.toHaveBeenCalled();
   });
 
+  it("should omit a generic title when the connected instance has no name", async () => {
+    getStatusMock.mockResolvedValue({
+      connected: true,
+      loggedIn: true,
+      name: "   ",
+    });
+    const wrapper = await mountConnection();
+    await flushPromises();
+
+    const panel = wrapper.get("[data-testid='success-panel']");
+    expect(panel.text()).toContain("WhatsApp conectado");
+    expect(panel.text()).not.toContain("Instância");
+  });
+
   it("should show a skeleton while the first status request is in flight", async () => {
     getStatusMock.mockReturnValue(new Promise(() => undefined));
     const wrapper = await mountConnection();
@@ -134,6 +155,10 @@ describe("ConnectionView", () => {
     expect(wrapper.get("[data-testid='qr-countdown']").text()).toBe(
       "Atualiza em 60s",
     );
+    expect(wrapper.text()).toContain(
+      "No celular: WhatsApp, Aparelhos conectados, Conectar aparelho.",
+    );
+    expect(wrapper.text()).not.toContain("outro aparelho");
   });
 
   it("should keep the displayed QR while status is polled", async () => {
@@ -202,5 +227,67 @@ describe("ConnectionView", () => {
     expect(connectInstanceMock).not.toHaveBeenCalled();
     expect(wrapper.text()).toContain("Parear com número de telefone");
     expect(wrapper.find("#pair-phone").exists()).toBe(true);
+  });
+
+  it("should explain that a phone cannot scan a QR code on its own screen", async () => {
+    mockMatchMedia(true);
+    getStatusMock.mockResolvedValue({
+      connected: true,
+      loggedIn: false,
+      name: "Loja Centro",
+    });
+    const wrapper = await mountConnection();
+    await flushPromises();
+
+    await wrapper.get("[data-testid='other-methods']").trigger("toggle");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      "Esta tela está no celular. Abra a mesma página em outro aparelho",
+    );
+  });
+
+  it("should wait to flag an incomplete phone until the field is left", async () => {
+    mockMatchMedia(true);
+    getStatusMock.mockResolvedValue({
+      connected: false,
+      loggedIn: false,
+      name: "Loja Centro",
+    });
+    const wrapper = await mountConnection();
+    await flushPromises();
+
+    const input = wrapper.get("#pair-phone");
+    await input.setValue("8199");
+    expect(wrapper.text()).not.toContain("Informe o DDI e o DDD");
+
+    await input.trigger("blur");
+    expect(wrapper.text()).toContain("Informe o DDI e o DDD, só números");
+  });
+
+  it("should show how long a pairing code stays valid", async () => {
+    mockMatchMedia(true);
+    getStatusMock.mockResolvedValue({
+      connected: false,
+      loggedIn: false,
+      name: "Loja Centro",
+    });
+    pairInstanceMock.mockResolvedValue({ pairingCode: "ABCD1234" });
+    const wrapper = await mountConnection();
+    await flushPromises();
+
+    await wrapper.get("#pair-phone").setValue("81999999999");
+    await wrapper.get("#pair-phone").trigger("blur");
+    const generate = wrapper
+      .findAll("button")
+      .find((button) => button.text() === "Gerar código");
+    expect(generate).toBeDefined();
+    await generate?.trigger("click");
+    await flushPromises();
+
+    expect(pairInstanceMock).toHaveBeenCalledWith("5581999999999");
+    expect(wrapper.get("[data-testid='pair-countdown']").text()).toBe(
+      "Válido por 60s",
+    );
   });
 });
