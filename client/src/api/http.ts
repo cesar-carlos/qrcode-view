@@ -25,23 +25,33 @@ export async function apiRequest<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const response = await fetch(path, {
-    ...init,
-    credentials: "same-origin",
-    headers: {
-      accept: "application/json",
-      ...(init?.body === undefined
-        ? {}
-        : { "content-type": "application/json" }),
-      ...init?.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      ...init,
+      credentials: "same-origin",
+      headers: {
+        accept: "application/json",
+        ...(init?.body === undefined
+          ? {}
+          : { "content-type": "application/json" }),
+        ...init?.headers,
+      },
+    });
+  } catch {
+    throw new ApiError(0, "network", "Network request failed");
+  }
 
   if (response.status === 204) {
     return schema.parse(undefined);
   }
 
-  const payload: unknown = await response.json();
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new ApiError(response.status, "invalid_response", "Invalid response");
+  }
   const failure = failureSchema.safeParse(payload);
   if (!response.ok || failure.success) {
     const code = failure.success ? failure.data.error.code : "request_failed";
