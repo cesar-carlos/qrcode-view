@@ -3,6 +3,7 @@ import { computed } from "vue";
 import {
   formatPairingCode,
   formatPairingPhone,
+  normalizePairingPhone,
   pairingPhoneDigits,
 } from "@/pairing-phone";
 
@@ -28,7 +29,8 @@ function onPhoneInput(event: Event): void {
   if (!(target instanceof HTMLInputElement)) {
     return;
   }
-  emit("update:phone", pairingPhoneDigits(target.value));
+  const digits = pairingPhoneDigits(target.value);
+  emit("update:phone", normalizePairingPhone(digits) ?? digits);
 }
 </script>
 

@@ -14,7 +14,7 @@ import {
   STATUS_POLL_INTERVAL_MS,
 } from "@/constants";
 import { useNarrowViewport } from "@/narrow-viewport";
-import { pairingPhoneError } from "@/pairing-phone";
+import { normalizePairingPhone, pairingPhoneError } from "@/pairing-phone";
 import { useInstanceStore } from "@/stores/instance-store";
 import { useSessionStore } from "@/stores/session-store";
 
@@ -218,11 +218,12 @@ function updateQr(): void {
 }
 
 function startPair(): void {
-  if (pairPhoneError.value !== null || pairPhone.value.trim().length === 0) {
+  const phone = normalizePairingPhone(pairPhone.value);
+  if (phone === null) {
     return;
   }
   disconnectNotice.value = "";
-  void instance.pair(pairPhone.value);
+  void instance.pair(phone);
 }
 
 function startReconnect(): void {

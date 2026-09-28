@@ -16,8 +16,14 @@ export const connectBodySchema = z.object({
     .optional(),
 });
 
+const pairingPhoneSchema = z
+  .string()
+  .trim()
+  .transform((value) => value.replace(/\D/g, ""))
+  .pipe(z.string().regex(/^55\d{10,11}$/));
+
 export const pairBodySchema = z.object({
-  phone: phoneSchema,
+  phone: pairingPhoneSchema,
 });
 
 export type ConnectBody = z.infer<typeof connectBodySchema>;
