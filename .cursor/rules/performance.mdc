@@ -1,0 +1,10 @@
+---
+description: Runtime limits for polling and the Express proxy
+alwaysApply: true
+---
+
+# Performance
+
+- Keep handlers non-blocking. The Evolution client must use timeouts and must not buffer large upstream bodies.
+- QR and status polling intervals live in one constant. Do not poll faster than the connection flow needs, and stop when `LoggedIn` is true or the view is gone.
+- Do not add caches, queues, or workers for this proxy.

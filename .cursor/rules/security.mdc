@@ -1,0 +1,15 @@
+---
+description: Instance token, cookie, and proxy security
+alwaysApply: true
+---
+
+# Security
+
+- The instance token arrives once, on `POST /api/v1/session`. Store it only in an `HttpOnly` cookie (`Secure` in production, explicit `SameSite`).
+- The Evolution client reads that cookie on the server and sends it as upstream `apikey`. Do not accept `apikey` from the browser on later requests.
+- Validate `body`, `query`, and `params` with Zod. Do not trust the client for which upstream route to call.
+- Use `helmet`, a restrictive `cors` origin, and a body size limit. Check `Origin` on cookie-authenticated unsafe methods.
+- Never hardcode the upstream URL or any token. Read config from the environment and list keys in `.env.example`.
+- Log only safe metadata (route, status, upstream status). Never log the token, `apikey`, `Cookie`, or `Set-Cookie`.
+- Return generic errors to the client. Do not forward upstream stacks or raw Evolution error bodies when they might repeat the token.
+- Rate-limit `POST /session` so token guessing is not cheap.

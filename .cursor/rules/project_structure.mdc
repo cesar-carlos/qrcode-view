@@ -1,0 +1,21 @@
+---
+description: Folder layout for the Vue client and Express server
+alwaysApply: true
+---
+
+# Project structure
+
+```
+client/src/          Vue app (views, components, stores, router, api)
+server/src/app.ts    Express app, no listen
+server/src/server.ts HTTP bootstrap
+server/src/presentation/http/   routes, controllers, validators, middleware
+server/src/application/         one use case per connection action
+server/src/infrastructure/evolution/   upstream HTTP client
+server/src/shared/              config, errors, logger, constants
+```
+
+- Feature files stay small: `session`, then `instance` actions. Do not grow one controller for every upstream route.
+- Environment parsing lives in `server/src/shared/config`. Document keys in `.env.example`.
+- The Vue `api` module calls `/api/v1` only.
+- Do not add `src/domain`, `src/presentation/socket`, `socket.ts`, or Python scripts.

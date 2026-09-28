@@ -1,0 +1,29 @@
+---
+description: Product scope for the WhatsApp instance connection screen
+alwaysApply: true
+---
+
+# Product scope
+
+This app lets someone who already has an Evolution GO instance token connect that instance's WhatsApp. It is not an instance admin console.
+
+Upstream API: `https://evogo.se7esistemassinop.com.br`. Spec: `/swagger/doc.json`. Auth header on upstream calls: `apikey` set to the instance token.
+
+## Allowed upstream calls
+
+Only these instance-token routes (`Auth`, not `AuthAdmin`):
+
+- `GET /instance/status`
+- `POST /instance/connect`
+- `GET /instance/qr`
+- `POST /instance/pair` (`phone` is required)
+- `POST /instance/reconnect`
+- `POST /instance/disconnect`
+
+## Forbidden
+
+Do not add UI, routes, or client methods for creating, deleting, logging out, proxy changes, force reconnect, logs, listing instances, or any other Evolution GO tag (messages, groups, users, license). `DELETE /instance/logout` unlinks the phone; it is out of scope even though it uses the instance token.
+
+Advanced settings stay out until the user asks. They need an `instanceId` the status payload does not return.
+
+The browser never calls Evolution GO and never sees the instance token after login. Express holds the token and proxies the calls above.

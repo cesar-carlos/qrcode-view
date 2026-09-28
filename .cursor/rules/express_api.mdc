@@ -1,0 +1,24 @@
+---
+description: Express routes for the instance session and connection proxy
+globs: server/**/*.ts
+alwaysApply: false
+---
+
+# Express API
+
+Mount routers in `app.ts` under `/api/v1`. Route files only register middleware and controllers.
+
+Session:
+
+- `POST /api/v1/session` accepts `{ token }`, checks it with upstream `GET /instance/status`, and sets an `HttpOnly` cookie. The JSON body must not echo the token.
+- `DELETE /api/v1/session` clears the cookie.
+
+Instance (cookie required): `status`, `connect`, `qr`, `pair`, `reconnect`, `disconnect`. Map them to the allowed upstream routes in `product.mdc`. Reject anything else with the normal error envelope.
+
+- Protected order: `requireInstanceSession -> validateRequest -> controller`.
+- `POST /session` is public and still validated.
+- Controllers read validated input, call one application service, and map the result to HTTP.
+- Success with a body: `{ success: true, data }`. Failure: `{ success: false, error: { code, message } }`.
+- `204` has no body.
+- Call `next(error)` into the centralized error handler. Register `404`, then `errorMiddleware` last in `app.ts`.
+- Status codes: `200`, `204`, `400`, `401`, `422`, `502`, `503`. Upstream failures become `502` with a generic message.

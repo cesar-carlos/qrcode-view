@@ -1,0 +1,25 @@
+---
+description: Client and Express proxy boundaries for this app
+alwaysApply: true
+---
+
+# Architecture
+
+Two runtimes, one product:
+
+- `client/` is the Vue screen. It talks only to this app's Express API.
+- `server/` is an Express BFF. It validates input, holds the instance session, and calls Evolution GO.
+
+Keep `app.ts` importable in tests without listening. `server.ts` opens the port.
+
+Preferred server flow: `route -> validate -> controller -> application service -> Evolution client`.
+
+- Controllers translate HTTP only. They do not call Evolution GO.
+- Application services decide the connection step (status, connect, QR, pair, reconnect, disconnect) and return a typed result.
+- The Evolution client is the only module that sets `apikey` and knows the upstream base URL.
+- Do not add a database, Socket.IO, or a second transport. Status and QR refresh by polling our HTTP API.
+- Do not publish Swagger for this app. The contract is the small JSON API under `/api/v1`.
+
+Wire concrete clients in the server composition root, not with ad hoc `new` inside application code.
+
+There is no domain or persistence layer. Do not introduce repositories, ORMs, or entities for this proxy.

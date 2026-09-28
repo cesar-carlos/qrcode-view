@@ -1,0 +1,15 @@
+---
+description: Tests for the session gate and instance proxy
+globs: "**/*.{test,spec}.ts"
+alwaysApply: false
+---
+
+# Testing
+
+- Put server tests next to the module or under `server/tests/`, mirroring the source file.
+- Unit-test application services with a fake Evolution client. Do not hit the real upstream.
+- HTTP tests use the Express app without listening. Cover the session cookie, `401` without a session, and the response envelope.
+- Assert the proxy never forwards create, delete, or logout, and never returns the raw token.
+- Client tests cover the token form and the connection states. Mock our API, not Evolution GO.
+- Name tests by behavior: `should reject session when upstream status is unauthorized`.
+- Reset mocks between tests.

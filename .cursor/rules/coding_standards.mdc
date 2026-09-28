@@ -1,0 +1,15 @@
+---
+description: Coding standards for this repository
+alwaysApply: true
+---
+
+# Coding standards
+
+- Prefer small modules and early returns. One file, one reason to change.
+- Name functions after the connection action: `getInstanceStatus`, `startConnection`, `requireInstanceSession`.
+- Replace timeouts, poll intervals, and body limits with named constants in `server/src/shared` or a feature-local constants file.
+- Comments explain a non-obvious trade-off. Write them in English.
+- Do not leave commented-out code, empty `catch` blocks, or unused exports.
+- Do not add README or other markdown docs unless the user asks. `.env.example` is required when a new env key is introduced.
+- Handle failures with the shared error type. Do not swallow them.
+- Controllers stay a short pipeline: read validated input, call the application service, map the result. Policy belongs in the application layer.

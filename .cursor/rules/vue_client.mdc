@@ -1,0 +1,15 @@
+---
+description: Vue, Pinia, and Tailwind conventions for the connection screen
+globs: client/**/*.{vue,ts,css}
+alwaysApply: false
+---
+
+# Vue client
+
+- Use `<script setup lang="ts">` and Pinia. Keep connection state in a store, not in scattered component refs.
+- Views render. Stores call `client/src/api`. The API client calls this app's `/api/v1` only.
+- The token field exists only on the entry form. After a successful session response, drop it from component state. Do not put it in Pinia, `localStorage`, or `sessionStorage`.
+- Screens: token entry, then connection (status, connect, QR or pairing code, reconnect, disconnect). No create, delete, or logout controls.
+- Poll status and QR through our API while a connection attempt is in progress. Stop polling when the view unmounts or the session ends.
+- Style with Tailwind utilities. Match existing spacing and color choices in the screen you are editing.
+- Router guards send unauthenticated users to the token screen. Treat `401` from our API as a signed-out session.

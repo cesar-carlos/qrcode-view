@@ -1,0 +1,12 @@
+---
+description: Libraries for the Vue client and Express server
+alwaysApply: true
+---
+
+# Project stack
+
+- Client: Vue 3 (`<script setup>`), Vue Router, Pinia, Tailwind CSS, Vite.
+- Server: `express`, `cors`, `cookie-parser`, `helmet`, `zod`, `dotenv`.
+- TypeScript 7 (`typescript`) for `tsc`. `vue-tsc` still needs the TypeScript 6 programmatic API (`@typescript/typescript6`) until TypeScript 7.1 ships a stable compiler API. Do not drop that compatibility package to force Vue onto TypeScript 7.
+- Validate request bodies with Zod. Validate Evolution GO JSON at the infrastructure boundary before the application layer trusts it.
+- Do not add Socket.IO, Prisma, Redis, JWT, bcrypt, Swagger, `moment`, or a UI component kit unless the user asks.

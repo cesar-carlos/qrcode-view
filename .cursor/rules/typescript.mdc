@@ -1,0 +1,16 @@
+---
+description: TypeScript standards for the client and server
+globs: "**/*.{ts,vue}"
+alwaysApply: false
+---
+
+# TypeScript
+
+- Keep `strict: true`. Do not weaken compiler options to silence a new error.
+- Never introduce `any` when `unknown`, generics, unions, or narrowing will do.
+- Add explicit return types on exported functions.
+- Use `interface` for object contracts and `type` for unions and mapped types.
+- Prefer named exports and `import type`.
+- Model connection outcomes as a discriminated union (`disconnected`, `awaiting_qr`, `awaiting_pair`, `connected`) instead of loose strings.
+- Validate external JSON at the boundary, then use the parsed type inside the app.
+- Catch errors as `unknown` and narrow before reading properties.

@@ -1,0 +1,12 @@
+---
+description: Rule precedence and how to finish a task
+alwaysApply: true
+---
+
+# Rule governance
+
+- Precedence when rules conflict: `product` -> `security` -> `architecture` -> `express_api` or `vue_client` -> `performance` -> `typescript` -> `testing` -> `coding_standards`. `project_structure` and `project_stack` say where code lives and which libraries to use.
+- Do not create a Git branch unless the user asks. Work on the current branch.
+- If a narrow exception is required, keep it local, name it, test it, and note when it can be removed.
+- Before finishing a multi-file change, run the project's lint and the tests that cover the area you touched. Run typecheck when shared types or `tsconfig` behavior changed.
+- If lint or tests cannot be run, say so in the handoff.
