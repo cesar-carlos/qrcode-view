@@ -1,6 +1,5 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { QR_NOT_READY_QUIET_POLLS } from "@/constants";
 import { ApiError } from "@/api/http";
 import {
   connectInstance,
@@ -88,7 +87,7 @@ describe("useInstanceStore errors", () => {
     });
     getQrCodeMock
       .mockResolvedValueOnce(visibleQr)
-      .mockRejectedValue(new ApiError(422, "not_ready", "not ready"));
+      .mockRejectedValue(new ApiError(204, "not_ready", "not ready"));
     const store = useInstanceStore();
 
     await store.refreshStatus();
@@ -98,23 +97,56 @@ describe("useInstanceStore errors", () => {
     expect(store.qr).toBeNull();
     expect(store.errorMessage).toBe("");
 
-    for (
-      let attempt = 0;
-      attempt < QR_NOT_READY_QUIET_POLLS - 2;
-      attempt += 1
-    ) {
-      await store.refreshQr();
-      expect(store.errorMessage).toBe("");
-    }
-
     await store.refreshQr();
+    expect(store.errorMessage).toBe("");
+
+    expect(await store.refreshQr(true)).toBe(false);
     expect(store.errorMessage).toBe(
       "Não foi possível atualizar o QR Code. A instância ainda não está pronta. Espere um instante e tente de novo.",
     );
     expect(store.errorMessage).not.toContain("válido");
   });
 
+  it("should not poll QR until the WhatsApp socket is connected", async () => {
+    getStatusMock.mockResolvedValue({
+      connected: false,
+      loggedIn: false,
+      name: "Loja",
+    });
+    const store = useInstanceStore();
+
+    await store.refreshStatus();
+    expect(await store.refreshQr()).toBe(false);
+    expect(getQrCodeMock).not.toHaveBeenCalled();
+  });
+
+  it("should ignore the first QR timeout while the code is still being generated", async () => {
+    getStatusMock.mockResolvedValue({
+      connected: true,
+      loggedIn: false,
+      name: "Loja",
+    });
+    getQrCodeMock.mockRejectedValue(
+      new ApiError(503, "upstream_unavailable", "Evolution GO is unavailable"),
+    );
+    const store = useInstanceStore();
+
+    await store.refreshStatus();
+    expect(await store.refreshQr()).toBe(false);
+    expect(store.errorMessage).toBe("");
+
+    expect(await store.refreshQr()).toBe(false);
+    expect(store.errorMessage).toBe(
+      "Não foi possível atualizar o QR Code. O Evolution GO está indisponível. Tente de novo em instantes.",
+    );
+  });
+
   it("should replace the QR when a passkey ceremony starts", async () => {
+    getStatusMock.mockResolvedValue({
+      connected: true,
+      loggedIn: false,
+      name: "Loja",
+    });
     getQrCodeMock.mockResolvedValueOnce(visibleQr).mockResolvedValueOnce({
       imageSrc: null,
       code: null,
@@ -124,6 +156,7 @@ describe("useInstanceStore errors", () => {
     });
     const store = useInstanceStore();
 
+    await store.refreshStatus();
     await store.refreshQr();
     expect(await store.refreshQr()).toBe(true);
     expect(store.qr?.imageSrc).toBeNull();

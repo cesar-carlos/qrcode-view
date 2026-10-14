@@ -20,6 +20,10 @@ const passkeyActive = computed(
     filled(props.qr?.passkeyCode),
 );
 
+const qrReady = computed(
+  () => filled(props.qr?.imageSrc) && !passkeyActive.value,
+);
+
 const emit = defineEmits<{
   refresh: [];
 }>();
@@ -55,13 +59,20 @@ onUnmounted(() => {
   <section class="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6">
     <h2 class="text-sm font-medium text-zinc-800">
       {{
-        passkeyActive ? "Confirme no WhatsApp" : "Aponte a câmera do WhatsApp"
+        passkeyActive
+          ? "Confirme no WhatsApp"
+          : qrReady
+            ? "Aponte a câmera do WhatsApp"
+            : "Gerando o QR Code"
       }}
     </h2>
     <p class="mt-1 text-sm leading-6 text-zinc-600">
       <template v-if="passkeyActive">
         O WhatsApp pediu uma confirmação extra. Abra o WhatsApp Web, conclua a
         verificação e confira o código abaixo se ele aparecer.
+      </template>
+      <template v-else-if="!qrReady">
+        Isso costuma levar alguns segundos.
       </template>
       <template v-else-if="openedOnPhone">
         Esta tela está no celular. Abra a mesma página em outro aparelho e
@@ -72,15 +83,20 @@ onUnmounted(() => {
       </template>
     </p>
     <img
-      v-if="qr?.imageSrc && !passkeyActive"
-      :src="qr.imageSrc"
+      v-if="qrReady"
+      :src="qr?.imageSrc ?? ''"
       alt="QR Code para conectar o WhatsApp"
       class="mx-auto mt-4 block h-72 w-72 rounded-lg bg-white object-contain p-3 sm:h-80 sm:w-80"
       :class="flash ? 'ring-2 ring-emerald-400 ring-offset-2' : ''"
     />
-    <p v-else-if="!passkeyActive" class="mt-4 text-sm text-zinc-600">
-      Aguardando o QR Code da instância.
-    </p>
+    <div
+      v-else-if="!passkeyActive"
+      data-testid="qr-placeholder"
+      class="mx-auto mt-4 flex h-72 w-72 animate-pulse items-center justify-center rounded-lg border border-dashed border-zinc-200 bg-zinc-50 sm:h-80 sm:w-80"
+      role="status"
+    >
+      <p class="px-6 text-center text-sm text-zinc-600">Gerando o código…</p>
+    </div>
     <p
       v-if="secondsLeft !== null && !passkeyActive"
       data-testid="qr-countdown"

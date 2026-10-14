@@ -12,7 +12,8 @@
     "format:check": "prettier --check .",
     "typecheck": "npm run typecheck -w server && npm run typecheck -w client",
     "test": "npm run test -w server && npm run test -w client",
-    "build": "npm run build -w client && npm run build -w server"
+    "build": "npm run build -w client && npm run build -w server",
+    "release": "npm run build && pm2 startOrReload ecosystem.config.cjs --update-env --interpreter \"$(node -p process.execPath)\""
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

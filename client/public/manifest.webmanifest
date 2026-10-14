@@ -1,5 +1,11 @@
 {
   "name": "Conectar WhatsApp",
+  "short_name": "WhatsApp",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fafafa",
+  "theme_color": "#047857",
   "icons": [
     {
       "src": "/favicon.ico",

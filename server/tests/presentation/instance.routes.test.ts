@@ -1,5 +1,6 @@
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
+import { EvolutionRequestError } from "../../src/application/evolution-request-error.js";
 import { createApp } from "../../src/app.js";
 import { fakeEvolutionClient, testConfig } from "../helpers.js";
 
@@ -71,6 +72,25 @@ describe("instance proxy", () => {
     expect(national.status).toBe(200);
     expect(pair).toHaveBeenNthCalledWith(1, token, { phone: "351912345678" });
     expect(pair).toHaveBeenNthCalledWith(2, token, { phone: "5581999999999" });
+  });
+
+  it("should wait without an error body when Evolution has no QR yet", async () => {
+    const evolutionClient = fakeEvolutionClient({
+      getQr: async () => {
+        throw new EvolutionRequestError(
+          "not_ready",
+          "The instance is not ready for that action yet",
+        );
+      },
+    });
+    const app = createApp({ config: testConfig(), evolutionClient });
+
+    const response = await request(app)
+      .get("/api/v1/instance/qr")
+      .set("Cookie", `instance_session=${token}`);
+
+    expect(response.status).toBe(204);
+    expect(response.body).toEqual({});
   });
 
   it("should not expose logout, create, or delete", async () => {

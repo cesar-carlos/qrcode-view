@@ -1,6 +1,10 @@
-import { UPSTREAM_TIMEOUT_MS } from "../../shared/constants.js";
+import {
+  QR_UPSTREAM_TIMEOUT_MS,
+  UPSTREAM_TIMEOUT_MS,
+} from "../../shared/constants.js";
 import type { AppConfig } from "../../shared/config/env.js";
 import { EvolutionRequestError } from "../../application/evolution-request-error.js";
+import { logInfo } from "../../shared/logger.js";
 import type {
   ConnectInput,
   EvolutionClient,
@@ -35,9 +39,9 @@ const upstreamMessage = {
 } as const;
 
 /**
- * Evolution GO writes every connect field it receives. An empty webhook,
- * subscribe list, or producer flag replaces the instance configuration.
- * `immediate` only starts the session. `phone` is sent when the caller set one.
+ * Evolution GO connect is partial: omitted fields stay as they are.
+ * Empty subscribe or producer strings also preserve existing values.
+ * `immediate` starts the session. `phone` is sent when the caller set one.
  */
 export function toConnectPayload(input: ConnectInput): {
   immediate: true;
@@ -47,6 +51,12 @@ export function toConnectPayload(input: ConnectInput): {
     return { immediate: true, phone: input.phone };
   }
   return { immediate: true };
+}
+
+export function shouldLogUpstreamFailure(
+  kind: EvolutionRequestError["kind"],
+): boolean {
+  return kind !== "not_ready";
 }
 
 export function classifyUpstreamStatus(
@@ -62,11 +72,14 @@ export function classifyUpstreamStatus(
   if (status === 401) {
     return "unauthorized";
   }
+  if (
+    path === "/instance/qr" &&
+    (status === 400 || status === 404 || status === 422)
+  ) {
+    return "not_ready";
+  }
   if (status === 404) {
     return "not_found";
-  }
-  if (status === 400 && path === "/instance/qr") {
-    return "not_ready";
   }
   return "upstream";
 }
@@ -89,9 +102,13 @@ export function createEvolutionClient(
       ).then(() => undefined);
     },
     getQr(token: string): Promise<QrCode> {
-      return send(config.evolutionApiBaseUrl, token, routes.qr).then(
-        parseQrCode,
-      );
+      return send(
+        config.evolutionApiBaseUrl,
+        token,
+        routes.qr,
+        undefined,
+        QR_UPSTREAM_TIMEOUT_MS,
+      ).then(parseQrCode);
     },
     pair(token: string, input: PairInput): Promise<PairingResult> {
       return send(config.evolutionApiBaseUrl, token, routes.pair, {
@@ -116,6 +133,7 @@ async function send(
   token: string,
   route: Route,
   body?: unknown,
+  timeoutMs: number = UPSTREAM_TIMEOUT_MS,
 ): Promise<unknown> {
   const url = new URL(route.path, baseUrl);
   const headers = new Headers({
@@ -133,9 +151,14 @@ async function send(
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       redirect: "manual",
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch {
+    logInfo("Upstream request failed", {
+      path: route.path,
+      method: route.method,
+      status: 0,
+    });
     throw new EvolutionRequestError(
       "unavailable",
       "Evolution GO is unavailable",
@@ -144,6 +167,13 @@ async function send(
 
   const failure = classifyUpstreamStatus(route.path, response.status);
   if (failure !== null && failure !== "unavailable") {
+    if (shouldLogUpstreamFailure(failure)) {
+      logInfo("Upstream request failed", {
+        path: route.path,
+        method: route.method,
+        status: response.status,
+      });
+    }
     throw new EvolutionRequestError(failure, upstreamMessage[failure]);
   }
 

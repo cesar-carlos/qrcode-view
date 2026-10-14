@@ -12,7 +12,7 @@ import {
   type InstanceStatus,
   type QrCode,
 } from "@/api/instance-api";
-import { QR_NOT_READY_QUIET_POLLS } from "@/constants";
+import { QR_UNAVAILABLE_QUIET_POLLS } from "@/constants";
 import { shouldKeepCurrentQr } from "@/qr-code";
 import {
   deriveConnectionPhase,
@@ -44,7 +44,7 @@ export const useInstanceStore = defineStore("instance", () => {
   const statusLoading = ref(false);
   const statusFailed = ref(false);
   const qrRefreshing = ref(false);
-  const qrNotReadyStreak = ref(0);
+  const qrUnavailableStreak = ref(0);
   let qrInFlight: Promise<boolean> | null = null;
   let qrEpoch = 0;
 
@@ -61,7 +61,7 @@ export const useInstanceStore = defineStore("instance", () => {
     statusLoading.value = false;
     statusFailed.value = false;
     qrRefreshing.value = false;
-    qrNotReadyStreak.value = 0;
+    qrUnavailableStreak.value = 0;
     qrInFlight = null;
     qrEpoch += 1;
   }
@@ -157,13 +157,19 @@ export const useInstanceStore = defineStore("instance", () => {
     }
     const notReady = error instanceof ApiError && error.code === "not_ready";
     if (notReady) {
-      qrNotReadyStreak.value += 1;
       if (qr.value?.imageSrc || qr.value?.passkeyOpenUrl || qr.value?.code) {
         qr.value = null;
       }
-      const stillQuiet =
-        !manual && qrNotReadyStreak.value < QR_NOT_READY_QUIET_POLLS;
-      if (stillQuiet) {
+      if (!manual) {
+        clearFailure("qr");
+        return false;
+      }
+    }
+    const unavailable =
+      error instanceof ApiError && error.code === "upstream_unavailable";
+    if (unavailable && !manual) {
+      qrUnavailableStreak.value += 1;
+      if (qrUnavailableStreak.value < QR_UNAVAILABLE_QUIET_POLLS) {
         clearFailure("qr");
         return false;
       }
@@ -174,6 +180,9 @@ export const useInstanceStore = defineStore("instance", () => {
 
   async function refreshQrNow(manual: boolean): Promise<boolean> {
     if (status.value?.loggedIn === true) {
+      return false;
+    }
+    if (!manual && status.value?.connected !== true) {
       return false;
     }
     const epoch = qrEpoch;
@@ -199,7 +208,7 @@ export const useInstanceStore = defineStore("instance", () => {
       if (epoch !== qrEpoch) {
         return false;
       }
-      qrNotReadyStreak.value = 0;
+      qrUnavailableStreak.value = 0;
       clearFailure("qr");
       if (shouldKeepCurrentQr(qr.value, next)) {
         return false;
@@ -252,7 +261,9 @@ export const useInstanceStore = defineStore("instance", () => {
       pendingAction.value = "qr";
       pairingCode.value = null;
       await refreshStatus();
-      await refreshQr();
+      if (status.value?.connected === true) {
+        await refreshQr();
+      }
     });
   }
 

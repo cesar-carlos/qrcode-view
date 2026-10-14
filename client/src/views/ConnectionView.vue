@@ -9,6 +9,8 @@ import ReconnectPanel from "@/components/ReconnectPanel.vue";
 import StatusBadge from "@/components/StatusBadge.vue";
 import SuccessPanel from "@/components/SuccessPanel.vue";
 import {
+  CONNECT_RETRY_AFTER_MS,
+  CONNECT_RETRY_MAX,
   PAIRING_CODE_LIFETIME_MS,
   QR_FIRST_LIFETIME_MS,
   QR_LIFETIME_MS,
@@ -35,6 +37,11 @@ const secondsLeft = ref<number | null>(null);
 const pairSecondsLeft = ref<number | null>(null);
 const skipAutoConnect = ref(false);
 const didAutoConnect = ref(false);
+const connectStuck = ref(false);
+const startingConnection = computed(
+  () =>
+    instance.phase === "awaiting_qr" && instance.status?.connected !== true,
+);
 const instanceName = computed(
   () => instance.status?.name?.trim() || "Instância",
 );
@@ -60,6 +67,8 @@ let tickTimer: ReturnType<typeof setInterval> | null = null;
 let qrWindow: "first" | "later" = "first";
 let qrRefreshInFlight = false;
 let pairTickTimer: ReturnType<typeof setInterval> | null = null;
+let connectWaitTimer: ReturnType<typeof setTimeout> | null = null;
+let connectRetries = 0;
 
 function stopPolling(): void {
   if (pollTimer !== null) {
@@ -121,7 +130,10 @@ function startPolling(): void {
         stopPolling();
         return;
       }
-      if (instance.phase === "awaiting_qr") {
+      if (
+        instance.phase === "awaiting_qr" &&
+        instance.status?.connected === true
+      ) {
         void instance.refreshQr();
       }
     });
@@ -155,6 +167,33 @@ watch(
       return;
     }
     stopPolling();
+  },
+);
+
+watch(
+  () => instance.status?.connected === true,
+  (connected) => {
+    if (connected && instance.phase === "awaiting_qr") {
+      connectRetries = 0;
+      connectStuck.value = false;
+      stopConnectWait();
+      void instance.refreshQr();
+    }
+  },
+);
+
+watch(
+  () =>
+    instance.phase === "awaiting_qr" &&
+    instance.status?.connected !== true &&
+    instance.busyAction !== "connect" &&
+    !connectStuck.value,
+  (waitingForSocket) => {
+    if (!waitingForSocket) {
+      stopConnectWait();
+      return;
+    }
+    startConnectWait();
   },
 );
 
@@ -228,6 +267,7 @@ function startPairCountdown(): void {
 onUnmounted(() => {
   stopPolling();
   stopPairCountdown();
+  stopConnectWait();
 });
 
 async function leave(): Promise<void> {
@@ -251,12 +291,47 @@ async function confirmAndDisconnect(): Promise<void> {
   disconnectNotice.value = "WhatsApp desconectado";
 }
 
+function stopConnectWait(): void {
+  if (connectWaitTimer !== null) {
+    clearTimeout(connectWaitTimer);
+    connectWaitTimer = null;
+  }
+}
+
+function startConnectWait(): void {
+  stopConnectWait();
+  connectWaitTimer = setTimeout(() => {
+    connectWaitTimer = null;
+    if (instance.status?.connected === true || instance.phase === "connected") {
+      return;
+    }
+    if (connectRetries < CONNECT_RETRY_MAX) {
+      connectRetries += 1;
+      startConnect();
+      return;
+    }
+    connectStuck.value = true;
+  }, CONNECT_RETRY_AFTER_MS);
+}
+
 function startConnect(): void {
   disconnectNotice.value = "";
+  connectStuck.value = false;
   void instance.connect();
 }
 
+function retryConnect(): void {
+  connectRetries = 0;
+  startConnect();
+}
+
 function updateQr(): void {
+  if (instance.status?.connected !== true) {
+    if (instance.busyAction !== "connect") {
+      startConnect();
+    }
+    return;
+  }
   void instance.refreshQr(true).then((changed) => {
     if (!changed && instance.qr?.imageSrc && instance.phase === "awaiting_qr") {
       startCountdown();
@@ -342,6 +417,7 @@ async function copyPairingCode(): Promise<void> {
           :failed="instance.statusFailed && instance.status === null"
           :logged-in="false"
           :connected="instance.status?.connected ?? false"
+          :starting="startingConnection"
         />
       </div>
     </header>
@@ -353,6 +429,24 @@ async function copyPairingCode(): Promise<void> {
     >
       {{ instance.errorMessage }}
     </p>
+
+    <div
+      v-if="connectStuck"
+      class="mt-6 space-y-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
+      role="alert"
+    >
+      <p class="text-sm leading-6 text-amber-950">
+        Não foi possível iniciar a conexão. Tente de novo.
+      </p>
+      <button
+        type="button"
+        class="min-h-11 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+        :disabled="instance.busy"
+        @click="retryConnect"
+      >
+        Tentar de novo
+      </button>
+    </div>
 
     <p
       v-if="disconnectNotice"

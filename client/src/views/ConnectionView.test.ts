@@ -10,6 +10,7 @@ import {
   pairInstance,
 } from "@/api/instance-api";
 import { useSessionStore } from "@/stores/session-store";
+import { CONNECT_RETRY_AFTER_MS } from "@/constants";
 import ConnectionView from "./ConnectionView.vue";
 import TokenView from "./TokenView.vue";
 
@@ -155,23 +156,51 @@ describe("ConnectionView", () => {
     await flushPromises();
 
     expect(connectInstanceMock).toHaveBeenCalledOnce();
-    expect(getQrCodeMock).toHaveBeenCalled();
+    expect(getQrCodeMock).not.toHaveBeenCalled();
     expect(wrapper.get("[data-testid='other-methods']").text()).toContain(
       "Outras formas de conectar",
     );
-    expect(wrapper.get("[data-testid='qr-countdown']").text()).toBe(
-      "Atualiza em 60s",
+    expect(wrapper.text()).toContain("Iniciando conexão…");
+    expect(wrapper.get("[data-testid='qr-placeholder']").text()).toBe(
+      "Gerando o código…",
     );
-    expect(wrapper.text()).toContain(
+    expect(wrapper.find("[data-testid='qr-countdown']").exists()).toBe(false);
+    expect(wrapper.text()).toContain("Isso costuma levar alguns segundos.");
+    expect(wrapper.text()).not.toContain(
       "No celular: WhatsApp, Aparelhos conectados, Conectar aparelho.",
     );
-    expect(wrapper.text()).not.toContain("outro aparelho");
+  });
+
+  it("should retry connect when the WhatsApp socket does not come up", async () => {
+    vi.useFakeTimers();
+    getStatusMock.mockResolvedValue({
+      connected: false,
+      loggedIn: false,
+      name: "Loja Centro",
+    });
+    const wrapper = await mountConnection();
+    await flushPromises();
+    expect(connectInstanceMock).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(CONNECT_RETRY_AFTER_MS);
+    await flushPromises();
+    expect(connectInstanceMock).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(CONNECT_RETRY_AFTER_MS);
+    await flushPromises();
+    expect(connectInstanceMock).toHaveBeenCalledTimes(3);
+
+    await vi.advanceTimersByTimeAsync(CONNECT_RETRY_AFTER_MS);
+    await flushPromises();
+    expect(connectInstanceMock).toHaveBeenCalledTimes(3);
+    expect(wrapper.text()).toContain("Não foi possível iniciar a conexão");
+    wrapper.unmount();
   });
 
   it("should keep the displayed QR while status is polled", async () => {
     vi.useFakeTimers();
     getStatusMock.mockResolvedValue({
-      connected: false,
+      connected: true,
       loggedIn: false,
       name: "Loja Centro",
     });
@@ -213,7 +242,7 @@ describe("ConnectionView", () => {
 
   it("should show the passkey step when the QR response asks for confirmation", async () => {
     getStatusMock.mockResolvedValue({
-      connected: false,
+      connected: true,
       loggedIn: false,
       name: "Loja Centro",
     });
@@ -230,7 +259,7 @@ describe("ConnectionView", () => {
     expect(wrapper.text()).toContain("Confirme no WhatsApp");
     expect(wrapper.text()).toContain("Abrir WhatsApp Web");
     expect(wrapper.text()).toContain("654321");
-    expect(wrapper.text()).not.toContain("Aguardando o QR Code");
+    expect(wrapper.text()).not.toContain("Aguardando o QR Code da instância");
     expect(wrapper.find("[data-testid='qr-countdown']").exists()).toBe(false);
   });
 

@@ -43,6 +43,13 @@ export async function apiRequest<T>(
   }
 
   if (response.status === 204) {
+    if (path === "/api/v1/instance/qr") {
+      throw new ApiError(
+        204,
+        "not_ready",
+        "The instance is not ready for that action yet",
+      );
+    }
     return schema.parse(undefined);
   }
 

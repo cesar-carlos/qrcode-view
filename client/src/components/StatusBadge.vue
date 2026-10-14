@@ -4,6 +4,7 @@ defineProps<{
   connected: boolean;
   checking: boolean;
   failed: boolean;
+  starting?: boolean;
 }>();
 </script>
 
@@ -19,7 +20,7 @@ defineProps<{
           ? 'bg-red-100 text-red-800'
           : loggedIn
             ? 'bg-emerald-100 text-emerald-800'
-            : connected
+            : connected || starting
               ? 'bg-amber-100 text-amber-800'
               : 'bg-zinc-100 text-zinc-700'
     "
@@ -33,7 +34,9 @@ defineProps<{
             ? "Logado no WhatsApp"
             : connected
               ? "Aguardando o QR Code"
-              : "Desconectado"
+              : starting
+                ? "Iniciando conexão…"
+                : "Desconectado"
     }}
   </span>
 </template>

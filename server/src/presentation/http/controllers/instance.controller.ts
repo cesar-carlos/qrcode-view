@@ -46,6 +46,10 @@ export function createInstanceController(deps: {
     qr: asyncHandler(async (_req: Request, res: Response): Promise<void> => {
       const result = await getQrCode(client, getInstanceToken(res));
       if (!result.success) {
+        if (result.error.code === "not_ready") {
+          res.status(204).end();
+          return;
+        }
         throw failureToError(result.error);
       }
       res.status(200).json({ success: true, data: result.data });

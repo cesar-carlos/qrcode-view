@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyUpstreamStatus,
+  shouldLogUpstreamFailure,
   toConnectPayload,
 } from "../../src/infrastructure/evolution/evolution-http-client.js";
 
@@ -20,6 +21,8 @@ describe("connect payload", () => {
 describe("upstream status", () => {
   it("should treat a missing QR as not ready", () => {
     expect(classifyUpstreamStatus("/instance/qr", 400)).toBe("not_ready");
+    expect(classifyUpstreamStatus("/instance/qr", 422)).toBe("not_ready");
+    expect(classifyUpstreamStatus("/instance/qr", 404)).toBe("not_ready");
   });
 
   it("should keep other client errors as upstream failures", () => {
@@ -33,5 +36,11 @@ describe("upstream status", () => {
       "unauthorized",
     );
     expect(classifyUpstreamStatus("/instance/status", 200)).toBeNull();
+  });
+
+  it("should not log a missing QR as an upstream failure", () => {
+    expect(shouldLogUpstreamFailure("not_ready")).toBe(false);
+    expect(shouldLogUpstreamFailure("unavailable")).toBe(true);
+    expect(shouldLogUpstreamFailure("upstream")).toBe(true);
   });
 });
