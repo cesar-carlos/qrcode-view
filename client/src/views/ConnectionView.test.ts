@@ -212,7 +212,7 @@ describe("ConnectionView", () => {
     await vi.advanceTimersByTimeAsync(9_000);
     await flushPromises();
 
-    expect(getQrCodeMock.mock.calls.length).toBeGreaterThan(qrFetches);
+    expect(getQrCodeMock.mock.calls.length).toBe(qrFetches);
     expect(
       wrapper
         .get("img[alt='QR Code para conectar o WhatsApp']")
@@ -220,8 +220,37 @@ describe("ConnectionView", () => {
     ).toBe("data:image/png;base64,abc");
     expect(getStatusMock.mock.calls.length).toBeGreaterThan(1);
     expect(wrapper.get("[data-testid='qr-countdown']").text()).toMatch(
-      /Atualiza em 5\ds/,
+      /Válido por 5\ds/,
     );
+  });
+
+  it("should start a fresh connection when the first QR expires", async () => {
+    vi.useFakeTimers();
+    getStatusMock.mockResolvedValue({
+      connected: true,
+      loggedIn: false,
+      name: "Loja Centro",
+    });
+    const wrapper = await mountConnection();
+    await flushPromises();
+    expect(connectInstanceMock).not.toHaveBeenCalled();
+    expect(wrapper.get("[data-testid='qr-countdown']").text()).toBe(
+      "Válido por 60s",
+    );
+
+    await vi.advanceTimersByTimeAsync(53_000);
+    await flushPromises();
+
+    expect(connectInstanceMock).toHaveBeenCalledOnce();
+    expect(
+      wrapper
+        .get("img[alt='QR Code para conectar o WhatsApp']")
+        .attributes("src"),
+    ).toBe("data:image/png;base64,abc");
+    expect(wrapper.get("[data-testid='qr-countdown']").text()).toMatch(
+      /Válido por [1-8]s/,
+    );
+    wrapper.unmount();
   });
 
   it("should keep the QR panel while the socket is up and WhatsApp is not logged in", async () => {
@@ -236,7 +265,7 @@ describe("ConnectionView", () => {
     expect(connectInstanceMock).not.toHaveBeenCalled();
     expect(getQrCodeMock).toHaveBeenCalled();
     expect(wrapper.get("[data-testid='qr-countdown']").text()).toBe(
-      "Atualiza em 60s",
+      "Válido por 60s",
     );
     expect(wrapper.find("[data-testid='success-panel']").exists()).toBe(false);
   });

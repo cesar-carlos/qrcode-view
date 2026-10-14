@@ -107,7 +107,7 @@ onUnmounted(() => {
       {{
         refreshing || secondsLeft === 0
           ? "Atualizando…"
-          : `Atualiza em ${secondsLeft}s`
+          : `Válido por ${secondsLeft}s`
       }}
     </p>
     <button

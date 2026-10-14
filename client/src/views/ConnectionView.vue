@@ -13,7 +13,7 @@ import {
   CONNECT_RETRY_MAX,
   PAIRING_CODE_LIFETIME_MS,
   QR_FIRST_LIFETIME_MS,
-  QR_LIFETIME_MS,
+  QR_RENEW_LEAD_SECONDS,
   STATUS_POLL_INTERVAL_MS,
 } from "@/constants";
 import { useNarrowViewport } from "@/narrow-viewport";
@@ -35,6 +35,7 @@ const copyMessage = ref("");
 const disconnectNotice = ref("");
 const secondsLeft = ref<number | null>(null);
 const pairSecondsLeft = ref<number | null>(null);
+const pairingNotice = ref("");
 const skipAutoConnect = ref(false);
 const didAutoConnect = ref(false);
 const connectStuck = ref(false);
@@ -64,9 +65,8 @@ const connectingQr = computed(
 );
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let tickTimer: ReturnType<typeof setInterval> | null = null;
-let qrWindow: "first" | "later" = "first";
-let qrRefreshInFlight = false;
 let pairTickTimer: ReturnType<typeof setInterval> | null = null;
+let renewStarted = false;
 let connectWaitTimer: ReturnType<typeof setTimeout> | null = null;
 let connectRetries = 0;
 
@@ -80,8 +80,6 @@ function stopPolling(): void {
     tickTimer = null;
   }
   secondsLeft.value = null;
-  qrWindow = "first";
-  qrRefreshInFlight = false;
 }
 
 function stopCountdown(): void {
@@ -93,9 +91,8 @@ function stopCountdown(): void {
 }
 
 function startCountdown(): void {
-  const lifetimeMs =
-    qrWindow === "first" ? QR_FIRST_LIFETIME_MS : QR_LIFETIME_MS;
-  secondsLeft.value = Math.floor(lifetimeMs / 1000);
+  renewStarted = false;
+  secondsLeft.value = Math.floor(QR_FIRST_LIFETIME_MS / 1000);
   if (tickTimer !== null) {
     clearInterval(tickTimer);
   }
@@ -103,14 +100,17 @@ function startCountdown(): void {
     if (secondsLeft.value === null) {
       return;
     }
+    if (!renewStarted && secondsLeft.value <= QR_RENEW_LEAD_SECONDS) {
+      renewStarted = true;
+      renewQr();
+    }
     if (secondsLeft.value <= 1) {
       if (tickTimer !== null) {
         clearInterval(tickTimer);
         tickTimer = null;
       }
-      qrWindow = "later";
       secondsLeft.value = 0;
-      void refreshHeldQr();
+      instance.dropExpiredQr();
       return;
     }
     secondsLeft.value -= 1;
@@ -132,28 +132,16 @@ function startPolling(): void {
       }
       if (
         instance.phase === "awaiting_qr" &&
-        instance.status?.connected === true
+        instance.status?.connected === true &&
+        (instance.qrHolding ||
+          (!instance.qr?.imageSrc &&
+            !instance.qr?.passkeyOpenUrl &&
+            !instance.qr?.passkeyCode))
       ) {
         void instance.refreshQr();
       }
     });
   }, STATUS_POLL_INTERVAL_MS);
-}
-
-async function refreshHeldQr(): Promise<void> {
-  if (qrRefreshInFlight || instance.phase !== "awaiting_qr") {
-    return;
-  }
-  qrRefreshInFlight = true;
-  qrWindow = "later";
-  try {
-    const changed = await instance.refreshQr();
-    if (!changed && instance.qr?.imageSrc && instance.phase === "awaiting_qr") {
-      startCountdown();
-    }
-  } finally {
-    qrRefreshInFlight = false;
-  }
 }
 
 watch(
@@ -204,8 +192,8 @@ watch(
       stopCountdown();
       return;
     }
-    if (previous !== undefined && previous !== null && next !== previous) {
-      qrWindow = "later";
+    if (previous === next) {
+      return;
     }
     startCountdown();
   },
@@ -261,6 +249,9 @@ function startPairCountdown(): void {
       return;
     }
     pairSecondsLeft.value -= 1;
+    if (pairSecondsLeft.value === 0) {
+      noteExpiredPairing();
+    }
   }, 1000);
 }
 
@@ -314,10 +305,33 @@ function startConnectWait(): void {
   }, CONNECT_RETRY_AFTER_MS);
 }
 
+function noteExpiredPairing(): void {
+  if (instance.pairingCode === null) {
+    return;
+  }
+  pairingNotice.value = "O código expirou. Gere outro.";
+  stopPairCountdown();
+  instance.expirePairing();
+}
+
 function startConnect(): void {
+  if (instance.busyAction === "connect") {
+    return;
+  }
   disconnectNotice.value = "";
   connectStuck.value = false;
   void instance.connect();
+}
+
+function renewQr(): void {
+  if (instance.phase !== "awaiting_qr" && instance.phase !== "awaiting_pair") {
+    return;
+  }
+  if (instance.busyAction === "connect") {
+    return;
+  }
+  noteExpiredPairing();
+  void instance.connect({ holdCurrent: true });
 }
 
 function retryConnect(): void {
@@ -326,17 +340,8 @@ function retryConnect(): void {
 }
 
 function updateQr(): void {
-  if (instance.status?.connected !== true) {
-    if (instance.busyAction !== "connect") {
-      startConnect();
-    }
-    return;
-  }
-  void instance.refreshQr(true).then((changed) => {
-    if (!changed && instance.qr?.imageSrc && instance.phase === "awaiting_qr") {
-      startCountdown();
-    }
-  });
+  renewStarted = true;
+  renewQr();
 }
 
 function markPairPhoneChecked(): void {
@@ -352,6 +357,7 @@ async function startPair(): Promise<void> {
     return;
   }
   disconnectNotice.value = "";
+  pairingNotice.value = "";
   await instance.pair(phone);
   if (instance.errorMessage === "" && instance.pairingCode !== null) {
     startPairCountdown();
@@ -503,6 +509,7 @@ async function copyPairingCode(): Promise<void> {
         :busy="instance.busy"
         :generating="instance.busyAction === 'pair'"
         :seconds-left="pairSecondsLeft"
+        :notice="pairingNotice"
         @update:phone="pairPhone = $event"
         @blur="markPairPhoneChecked"
         @pair="startPair"
@@ -578,6 +585,7 @@ async function copyPairingCode(): Promise<void> {
               :busy="instance.busy"
               :generating="instance.busyAction === 'pair'"
               :seconds-left="pairSecondsLeft"
+              :notice="pairingNotice"
               @update:phone="pairPhone = $event"
               @blur="markPairPhoneChecked"
               @pair="startPair"

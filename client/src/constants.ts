@@ -8,9 +8,10 @@ export const QR_UNAVAILABLE_QUIET_POLLS = 2;
 export const CONNECT_RETRY_AFTER_MS = 25_000;
 export const CONNECT_RETRY_MAX = 2;
 
-// Evolution GO keeps the first pairing QR for about 60s, then rotates every 20s.
+// The first QR from a fresh connect pairs. Later rotations from the same session do not.
 export const QR_FIRST_LIFETIME_MS = 60_000;
-export const QR_LIFETIME_MS = 20_000;
+// Start the next connect while the current code is still on screen.
+export const QR_RENEW_LEAD_SECONDS = 8;
 
 // Pair() issues the phone code against that first QR.
 export const PAIRING_CODE_LIFETIME_MS = QR_FIRST_LIFETIME_MS;

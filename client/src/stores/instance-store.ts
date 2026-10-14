@@ -45,8 +45,11 @@ export const useInstanceStore = defineStore("instance", () => {
   const statusFailed = ref(false);
   const qrRefreshing = ref(false);
   const qrUnavailableStreak = ref(0);
+  const qrHolding = ref(false);
   let qrInFlight: Promise<boolean> | null = null;
   let qrEpoch = 0;
+  let discardedQrKey: string | null = null;
+  let heldQrKey: string | null = null;
 
   function reset(): void {
     status.value = null;
@@ -62,8 +65,49 @@ export const useInstanceStore = defineStore("instance", () => {
     statusFailed.value = false;
     qrRefreshing.value = false;
     qrUnavailableStreak.value = 0;
+    qrHolding.value = false;
     qrInFlight = null;
     qrEpoch += 1;
+    discardedQrKey = null;
+    heldQrKey = null;
+  }
+
+  function qrKey(value: QrCode | null): string | null {
+    if (value === null) {
+      return null;
+    }
+    return value.code ?? value.imageSrc;
+  }
+
+  function discardCurrentQr(): void {
+    const key = qrKey(qr.value);
+    if (key !== null) {
+      discardedQrKey = key;
+    }
+    heldQrKey = null;
+    qrHolding.value = false;
+    qr.value = null;
+  }
+
+  function holdCurrentQr(): void {
+    heldQrKey = qrKey(qr.value);
+    qrHolding.value = heldQrKey !== null;
+  }
+
+  function dropExpiredQr(): void {
+    if (heldQrKey !== null && qrKey(qr.value) === heldQrKey) {
+      discardedQrKey = heldQrKey;
+      qr.value = null;
+    }
+    heldQrKey = null;
+    qrHolding.value = false;
+  }
+
+  function expirePairing(): void {
+    pairingCode.value = null;
+    if (pendingAction.value === "pair") {
+      pendingAction.value = "qr";
+    }
   }
 
   const phase = computed<ConnectionPhase>(() =>
@@ -210,6 +254,16 @@ export const useInstanceStore = defineStore("instance", () => {
       }
       qrUnavailableStreak.value = 0;
       clearFailure("qr");
+      const nextKey = qrKey(next);
+      if (
+        (heldQrKey !== null && nextKey === heldQrKey) ||
+        (discardedQrKey !== null && nextKey === discardedQrKey)
+      ) {
+        return false;
+      }
+      heldQrKey = null;
+      qrHolding.value = false;
+      discardedQrKey = null;
       if (shouldKeepCurrentQr(qr.value, next)) {
         return false;
       }
@@ -249,13 +303,20 @@ export const useInstanceStore = defineStore("instance", () => {
     }
   }
 
-  async function connect(): Promise<void> {
+  async function connect(options?: { holdCurrent?: boolean }): Promise<void> {
     await runAction("connect", async () => {
+      if (options?.holdCurrent === true) {
+        holdCurrentQr();
+      } else {
+        discardCurrentQr();
+      }
       const started = await guard(() => connectInstance(), {
         origin: "action",
         action: "connect",
       });
       if (!started) {
+        heldQrKey = null;
+        qrHolding.value = false;
         return;
       }
       pendingAction.value = "qr";
@@ -324,9 +385,12 @@ export const useInstanceStore = defineStore("instance", () => {
     statusLoading,
     statusFailed,
     qrRefreshing,
+    qrHolding,
     reset,
     refreshStatus,
     refreshQr,
+    dropExpiredQr,
+    expirePairing,
     connect,
     pair,
     reconnect,

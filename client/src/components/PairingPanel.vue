@@ -15,6 +15,7 @@ const props = defineProps<{
   busy: boolean;
   generating: boolean;
   secondsLeft: number | null;
+  notice?: string;
 }>();
 
 const emit = defineEmits<{
@@ -80,6 +81,14 @@ function onPhoneInput(event: Event): void {
             : "Gerar código"
       }}
     </button>
+    <p
+      v-if="notice && !pairingCode"
+      data-testid="pair-expired"
+      class="text-sm text-zinc-600"
+      role="status"
+    >
+      {{ notice }}
+    </p>
     <div v-if="pairingCode" class="space-y-2">
       <p
         data-testid="pairing-code"
