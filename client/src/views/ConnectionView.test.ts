@@ -84,7 +84,14 @@ describe("ConnectionView", () => {
     mockMatchMedia(false);
     getStatusMock.mockReset();
     connectInstanceMock.mockClear();
-    getQrCodeMock.mockClear();
+    getQrCodeMock.mockReset();
+    getQrCodeMock.mockResolvedValue({
+      imageSrc: "data:image/png;base64,abc",
+      code: null,
+      passkeyStage: null,
+      passkeyOpenUrl: null,
+      passkeyCode: null,
+    });
     pairInstanceMock.mockReset();
   });
 
@@ -175,7 +182,12 @@ describe("ConnectionView", () => {
     await vi.advanceTimersByTimeAsync(9_000);
     await flushPromises();
 
-    expect(getQrCodeMock.mock.calls.length).toBe(qrFetches);
+    expect(getQrCodeMock.mock.calls.length).toBeGreaterThan(qrFetches);
+    expect(
+      wrapper
+        .get("img[alt='QR Code para conectar o WhatsApp']")
+        .attributes("src"),
+    ).toBe("data:image/png;base64,abc");
     expect(getStatusMock.mock.calls.length).toBeGreaterThan(1);
     expect(wrapper.get("[data-testid='qr-countdown']").text()).toMatch(
       /Atualiza em 5\ds/,
@@ -197,6 +209,29 @@ describe("ConnectionView", () => {
       "Atualiza em 60s",
     );
     expect(wrapper.find("[data-testid='success-panel']").exists()).toBe(false);
+  });
+
+  it("should show the passkey step when the QR response asks for confirmation", async () => {
+    getStatusMock.mockResolvedValue({
+      connected: false,
+      loggedIn: false,
+      name: "Loja Centro",
+    });
+    getQrCodeMock.mockResolvedValue({
+      imageSrc: null,
+      code: null,
+      passkeyStage: "challenge",
+      passkeyOpenUrl: "https://web.whatsapp.com/#wapk=abc",
+      passkeyCode: "654321",
+    });
+    const wrapper = await mountConnection();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Confirme no WhatsApp");
+    expect(wrapper.text()).toContain("Abrir WhatsApp Web");
+    expect(wrapper.text()).toContain("654321");
+    expect(wrapper.text()).not.toContain("Aguardando o QR Code");
+    expect(wrapper.find("[data-testid='qr-countdown']").exists()).toBe(false);
   });
 
   it("should explain why the instance status could not be loaded", async () => {

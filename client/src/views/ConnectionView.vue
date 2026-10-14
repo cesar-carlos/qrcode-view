@@ -75,6 +75,14 @@ function stopPolling(): void {
   qrRefreshInFlight = false;
 }
 
+function stopCountdown(): void {
+  if (tickTimer !== null) {
+    clearInterval(tickTimer);
+    tickTimer = null;
+  }
+  secondsLeft.value = null;
+}
+
 function startCountdown(): void {
   const lifetimeMs =
     qrWindow === "first" ? QR_FIRST_LIFETIME_MS : QR_LIFETIME_MS;
@@ -86,7 +94,13 @@ function startCountdown(): void {
     if (secondsLeft.value === null) {
       return;
     }
-    if (secondsLeft.value <= 0) {
+    if (secondsLeft.value <= 1) {
+      if (tickTimer !== null) {
+        clearInterval(tickTimer);
+        tickTimer = null;
+      }
+      qrWindow = "later";
+      secondsLeft.value = 0;
       void refreshHeldQr();
       return;
     }
@@ -107,7 +121,7 @@ function startPolling(): void {
         stopPolling();
         return;
       }
-      if (instance.phase === "awaiting_qr" && !instance.qr?.imageSrc) {
+      if (instance.phase === "awaiting_qr") {
         void instance.refreshQr();
       }
     });
@@ -146,9 +160,13 @@ watch(
 
 watch(
   () => instance.qr?.code ?? instance.qr?.imageSrc ?? null,
-  (next) => {
+  (next, previous) => {
     if (next === null) {
+      stopCountdown();
       return;
+    }
+    if (previous !== undefined && previous !== null && next !== previous) {
+      qrWindow = "later";
     }
     startCountdown();
   },
@@ -239,7 +257,6 @@ function startConnect(): void {
 }
 
 function updateQr(): void {
-  qrWindow = "later";
   void instance.refreshQr(true).then((changed) => {
     if (!changed && instance.qr?.imageSrc && instance.phase === "awaiting_qr") {
       startCountdown();

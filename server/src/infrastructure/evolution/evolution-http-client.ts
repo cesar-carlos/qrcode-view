@@ -27,6 +27,50 @@ const routes = {
 
 type Route = (typeof routes)[keyof typeof routes];
 
+const upstreamMessage = {
+  unauthorized: "Instance token was rejected",
+  not_ready: "The instance is not ready for that action yet",
+  upstream: "Upstream request failed",
+  not_found: "Instance was not found",
+} as const;
+
+/**
+ * Evolution GO writes every connect field it receives. An empty webhook,
+ * subscribe list, or producer flag replaces the instance configuration.
+ * `immediate` only starts the session. `phone` is sent when the caller set one.
+ */
+export function toConnectPayload(input: ConnectInput): {
+  immediate: true;
+  phone?: string;
+} {
+  if (input.phone !== undefined && input.phone.length > 0) {
+    return { immediate: true, phone: input.phone };
+  }
+  return { immediate: true };
+}
+
+export function classifyUpstreamStatus(
+  path: string,
+  status: number,
+): EvolutionRequestError["kind"] | null {
+  if (status < 300) {
+    return null;
+  }
+  if (status < 400) {
+    return "upstream";
+  }
+  if (status === 401) {
+    return "unauthorized";
+  }
+  if (status === 404) {
+    return "not_found";
+  }
+  if (status === 400 && path === "/instance/qr") {
+    return "not_ready";
+  }
+  return "upstream";
+}
+
 export function createEvolutionClient(
   config: Pick<AppConfig, "evolutionApiBaseUrl">,
 ): EvolutionClient {
@@ -37,15 +81,12 @@ export function createEvolutionClient(
       );
     },
     connect(token: string, input: ConnectInput): Promise<void> {
-      return send(config.evolutionApiBaseUrl, token, routes.connect, {
-        immediate: true,
-        webhookUrl: input.webhookUrl ?? "",
-        subscribe: input.subscribe ?? [],
-        phone: input.phone ?? "",
-        rabbitmqEnable: "",
-        websocketEnable: "",
-        natsEnable: "",
-      }).then(() => undefined);
+      return send(
+        config.evolutionApiBaseUrl,
+        token,
+        routes.connect,
+        toConnectPayload(input),
+      ).then(() => undefined);
     },
     getQr(token: string): Promise<QrCode> {
       return send(config.evolutionApiBaseUrl, token, routes.qr).then(
@@ -55,7 +96,6 @@ export function createEvolutionClient(
     pair(token: string, input: PairInput): Promise<PairingResult> {
       return send(config.evolutionApiBaseUrl, token, routes.pair, {
         phone: input.phone,
-        subscribe: ["CONNECTION", "QRCODE"],
       }).then(parsePairingCode);
     },
     reconnect(token: string): Promise<void> {
@@ -102,23 +142,9 @@ async function send(
     );
   }
 
-  if (response.status >= 300 && response.status < 400) {
-    throw new EvolutionRequestError("upstream", "Upstream request failed");
-  }
-  if (response.status === 401) {
-    throw new EvolutionRequestError(
-      "unauthorized",
-      "Instance token was rejected",
-    );
-  }
-  if (response.status === 400) {
-    throw new EvolutionRequestError(
-      "not_ready",
-      "The instance is not ready for that action yet",
-    );
-  }
-  if (!response.ok) {
-    throw new EvolutionRequestError("upstream", "Upstream request failed");
+  const failure = classifyUpstreamStatus(route.path, response.status);
+  if (failure !== null && failure !== "unavailable") {
+    throw new EvolutionRequestError(failure, upstreamMessage[failure]);
   }
 
   const text = await response.text();

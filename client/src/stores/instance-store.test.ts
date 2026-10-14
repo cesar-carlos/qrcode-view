@@ -1,5 +1,6 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { QR_NOT_READY_QUIET_POLLS } from "@/constants";
 import { ApiError } from "@/api/http";
 import {
   connectInstance,
@@ -23,6 +24,15 @@ vi.mock("@/api/instance-api", () => ({
 
 const connectInstanceMock = vi.mocked(connectInstance);
 const getStatusMock = vi.mocked(getStatus);
+const getQrCodeMock = vi.mocked(getQrCode);
+
+const visibleQr = {
+  imageSrc: "data:image/png;base64,abc",
+  code: "code-1",
+  passkeyStage: null,
+  passkeyOpenUrl: null,
+  passkeyCode: null,
+};
 
 describe("useInstanceStore errors", () => {
   beforeEach(() => {
@@ -68,5 +78,68 @@ describe("useInstanceStore errors", () => {
       "Sessão expirada. Informe o token de novo.",
     );
     expect(useSessionStore().authenticated).toBe(false);
+  });
+
+  it("should drop an expired QR without calling it valid", async () => {
+    getStatusMock.mockResolvedValue({
+      connected: true,
+      loggedIn: false,
+      name: "Loja",
+    });
+    getQrCodeMock
+      .mockResolvedValueOnce(visibleQr)
+      .mockRejectedValue(new ApiError(422, "not_ready", "not ready"));
+    const store = useInstanceStore();
+
+    await store.refreshStatus();
+    expect(await store.refreshQr()).toBe(true);
+
+    expect(await store.refreshQr()).toBe(false);
+    expect(store.qr).toBeNull();
+    expect(store.errorMessage).toBe("");
+
+    for (
+      let attempt = 0;
+      attempt < QR_NOT_READY_QUIET_POLLS - 2;
+      attempt += 1
+    ) {
+      await store.refreshQr();
+      expect(store.errorMessage).toBe("");
+    }
+
+    await store.refreshQr();
+    expect(store.errorMessage).toBe(
+      "Não foi possível atualizar o QR Code. A instância ainda não está pronta. Espere um instante e tente de novo.",
+    );
+    expect(store.errorMessage).not.toContain("válido");
+  });
+
+  it("should replace the QR when a passkey ceremony starts", async () => {
+    getQrCodeMock.mockResolvedValueOnce(visibleQr).mockResolvedValueOnce({
+      imageSrc: null,
+      code: null,
+      passkeyStage: "challenge",
+      passkeyOpenUrl: "https://web.whatsapp.com/#wapk=abc",
+      passkeyCode: null,
+    });
+    const store = useInstanceStore();
+
+    await store.refreshQr();
+    expect(await store.refreshQr()).toBe(true);
+    expect(store.qr?.imageSrc).toBeNull();
+    expect(store.qr?.passkeyOpenUrl).toBe("https://web.whatsapp.com/#wapk=abc");
+  });
+
+  it("should not request a QR code when WhatsApp is already logged in", async () => {
+    getStatusMock.mockResolvedValue({
+      connected: true,
+      loggedIn: true,
+      name: "Loja",
+    });
+    const store = useInstanceStore();
+
+    await store.refreshStatus();
+    expect(await store.refreshQr()).toBe(false);
+    expect(getQrCodeMock).not.toHaveBeenCalled();
   });
 });

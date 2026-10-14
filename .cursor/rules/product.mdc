@@ -27,3 +27,5 @@ Do not add UI, routes, or client methods for creating, deleting, logging out, pr
 Advanced settings stay out until the user asks. They need an `instanceId` the status payload does not return.
 
 The browser never calls Evolution GO and never sees the instance token after login. Express holds the token and proxies the calls above.
+
+A shareable link may carry the instance token in the path `/{token}` or in the `token` query. Exchange that value immediately through `POST /api/v1/session`, then replace the address with `/conectar` so the token does not remain in the URL, history, or client state.

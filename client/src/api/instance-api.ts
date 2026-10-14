@@ -27,13 +27,10 @@ export function getStatus(): Promise<InstanceStatus> {
   return apiRequest(instanceStatusSchema, "/api/v1/instance/status");
 }
 
-export function connectInstance(input: {
-  phone?: string;
-  webhookUrl?: string;
-}): Promise<{ started: true }> {
+export function connectInstance(): Promise<{ started: true }> {
   return apiRequest(startedSchema, "/api/v1/instance/connect", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: JSON.stringify({}),
   });
 }
 

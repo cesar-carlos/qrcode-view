@@ -1,4 +1,3 @@
-import { DEFAULT_SUBSCRIBE } from "../../shared/constants.js";
 import type {
   ConnectInput,
   EvolutionClient,
@@ -11,9 +10,8 @@ export function startConnection(
   token: string,
   input: ConnectInput,
 ): Promise<Result<{ started: true }>> {
-  const subscribe = input.subscribe ?? DEFAULT_SUBSCRIBE;
   return runEvolution(async () => {
-    await client.connect(token, { ...input, subscribe });
+    await client.connect(token, input);
     return { started: true };
   });
 }

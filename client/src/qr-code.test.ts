@@ -24,9 +24,27 @@ describe("sameQr", () => {
 });
 
 describe("shouldKeepCurrentQr", () => {
-  it("should keep the visible QR when the next payload has no image", () => {
+  it("should drop the QR when the server clears the code", () => {
     expect(shouldKeepCurrentQr(qr(), qr({ imageSrc: null, code: null }))).toBe(
-      true,
+      false,
     );
+  });
+
+  it("should keep the image when the pairing code is unchanged", () => {
+    expect(shouldKeepCurrentQr(qr(), qr({ imageSrc: null }))).toBe(true);
+  });
+
+  it("should replace the QR when a passkey ceremony starts", () => {
+    expect(
+      shouldKeepCurrentQr(
+        qr(),
+        qr({
+          imageSrc: null,
+          code: null,
+          passkeyStage: "challenge",
+          passkeyOpenUrl: "https://web.whatsapp.com/#wapk=abc",
+        }),
+      ),
+    ).toBe(false);
   });
 });

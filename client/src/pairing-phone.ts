@@ -5,14 +5,17 @@ export function pairingPhoneDigits(value: string): string {
   return value.replace(/\D/g, "").slice(0, PAIRING_PHONE_MAX_DIGITS);
 }
 
-/** Digits Evolution GO accepts: country code 55, area code, and the number. */
+/**
+ * 10–11 digits are a Brazilian national number and gain country code 55.
+ * 12–15 digits already include a country code, so they stay unchanged.
+ */
 export function normalizePairingPhone(value: string): string | null {
   const digits = pairingPhoneDigits(value);
-  if (/^55\d{10,11}$/.test(digits)) {
-    return digits;
-  }
   if (/^\d{10,11}$/.test(digits)) {
     return `55${digits}`;
+  }
+  if (/^[1-9]\d{11,14}$/.test(digits)) {
+    return digits;
   }
   return null;
 }
@@ -34,13 +37,14 @@ export function formatPairingPhone(value: string): string {
     return "";
   }
 
-  const normalized = normalizePairingPhone(digits) ?? digits;
-  let country = "";
-  let rest = normalized;
-  if (normalized.startsWith("55") && normalized.length > 4) {
-    country = "+55 ";
-    rest = normalized.slice(2);
+  const brazilian = /^\d{10,11}$/.test(digits) || /^55\d{10,11}$/.test(digits);
+  if (!brazilian) {
+    return `+${digits}`;
   }
+
+  const normalized = digits.startsWith("55") ? digits : `55${digits}`;
+  const country = "+55 ";
+  const rest = normalized.slice(2);
 
   if (rest.length <= 2) {
     return `${country}${rest}`;

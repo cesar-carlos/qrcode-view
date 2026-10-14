@@ -1,5 +1,5 @@
 export type EvolutionFailureKind =
-  "unauthorized" | "not_ready" | "upstream" | "unavailable";
+  "unauthorized" | "not_ready" | "upstream" | "unavailable" | "not_found";
 
 export class EvolutionRequestError extends Error {
   readonly kind: EvolutionFailureKind;

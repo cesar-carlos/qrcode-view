@@ -37,6 +37,42 @@ describe("instance proxy", () => {
     expect(JSON.stringify(response.body)).not.toContain(token);
   });
 
+  it("should start a connection without replacing instance settings", async () => {
+    const { app, evolutionClient } = appWithCookie();
+    const connect = vi.spyOn(evolutionClient, "connect");
+
+    const response = await request(app)
+      .post("/api/v1/instance/connect")
+      .set("Cookie", `instance_session=${token}`)
+      .send({
+        webhookUrl: "https://example.test/hook",
+        subscribe: ["MESSAGE"],
+      });
+
+    expect(response.status).toBe(200);
+    expect(connect).toHaveBeenCalledWith(token, {});
+  });
+
+  it("should pair with a country code and prefix a Brazilian national number", async () => {
+    const { app, evolutionClient } = appWithCookie();
+    const pair = vi.spyOn(evolutionClient, "pair");
+    const cookie = `instance_session=${token}`;
+
+    const foreign = await request(app)
+      .post("/api/v1/instance/pair")
+      .set("Cookie", cookie)
+      .send({ phone: "+351 912 345 678" });
+    const national = await request(app)
+      .post("/api/v1/instance/pair")
+      .set("Cookie", cookie)
+      .send({ phone: "81999999999" });
+
+    expect(foreign.status).toBe(200);
+    expect(national.status).toBe(200);
+    expect(pair).toHaveBeenNthCalledWith(1, token, { phone: "351912345678" });
+    expect(pair).toHaveBeenNthCalledWith(2, token, { phone: "5581999999999" });
+  });
+
   it("should not expose logout, create, or delete", async () => {
     const { app } = appWithCookie();
     const cookie = `instance_session=${token}`;

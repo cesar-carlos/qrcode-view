@@ -1,5 +1,3 @@
-import type { InstanceEvent } from "../../shared/constants.js";
-
 export interface InstanceStatus {
   readonly connected: boolean;
   readonly loggedIn: boolean;
@@ -8,8 +6,6 @@ export interface InstanceStatus {
 
 export interface ConnectInput {
   readonly phone?: string;
-  readonly webhookUrl?: string;
-  readonly subscribe?: readonly InstanceEvent[];
 }
 
 export interface QrCode {

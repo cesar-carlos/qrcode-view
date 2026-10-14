@@ -12,6 +12,7 @@ import {
   type InstanceStatus,
   type QrCode,
 } from "@/api/instance-api";
+import { QR_NOT_READY_QUIET_POLLS } from "@/constants";
 import { shouldKeepCurrentQr } from "@/qr-code";
 import {
   deriveConnectionPhase,
@@ -43,6 +44,9 @@ export const useInstanceStore = defineStore("instance", () => {
   const statusLoading = ref(false);
   const statusFailed = ref(false);
   const qrRefreshing = ref(false);
+  const qrNotReadyStreak = ref(0);
+  let qrInFlight: Promise<boolean> | null = null;
+  let qrEpoch = 0;
 
   function reset(): void {
     status.value = null;
@@ -57,6 +61,9 @@ export const useInstanceStore = defineStore("instance", () => {
     statusLoading.value = false;
     statusFailed.value = false;
     qrRefreshing.value = false;
+    qrNotReadyStreak.value = 0;
+    qrInFlight = null;
+    qrEpoch += 1;
   }
 
   const phase = computed<ConnectionPhase>(() =>
@@ -79,11 +86,7 @@ export const useInstanceStore = defineStore("instance", () => {
       return;
     }
     errorOrigin.value = origin;
-    const message = messageForApiError(error, action);
-    errorMessage.value =
-      origin === "qr" && qr.value?.imageSrc
-        ? `${message} O QR Code na tela continua válido.`
-        : message;
+    errorMessage.value = messageForApiError(error, action);
   }
 
   function clearFailure(origin: ErrorOrigin): void {
@@ -144,21 +147,59 @@ export const useInstanceStore = defineStore("instance", () => {
     }
   }
 
-  async function refreshQr(manual = false): Promise<boolean> {
+  function handleQrFailure(
+    manual: boolean,
+    error: unknown,
+    epoch: number,
+  ): boolean {
+    if (epoch !== qrEpoch) {
+      return false;
+    }
+    const notReady = error instanceof ApiError && error.code === "not_ready";
+    if (notReady) {
+      qrNotReadyStreak.value += 1;
+      if (qr.value?.imageSrc || qr.value?.passkeyOpenUrl || qr.value?.code) {
+        qr.value = null;
+      }
+      const stillQuiet =
+        !manual && qrNotReadyStreak.value < QR_NOT_READY_QUIET_POLLS;
+      if (stillQuiet) {
+        clearFailure("qr");
+        return false;
+      }
+    }
+    reportFailure(manual ? "action" : "qr", error, "qr");
+    return false;
+  }
+
+  async function refreshQrNow(manual: boolean): Promise<boolean> {
+    if (status.value?.loggedIn === true) {
+      return false;
+    }
+    const epoch = qrEpoch;
     if (manual) {
       if (qrRefreshing.value) {
         return false;
       }
       qrRefreshing.value = true;
+      errorMessage.value = "";
+      errorOrigin.value = null;
     }
     try {
-      const next = await guard(() => getQrCode(), {
-        origin: manual ? "action" : "qr",
-        action: "qr",
-      });
-      if (next === null) {
+      let next: QrCode;
+      try {
+        next = await getQrCode();
+      } catch (error: unknown) {
+        if (error instanceof ApiError && error.status === 401) {
+          useSessionStore().markSignedOut(messageForApiError(error, "session"));
+          return false;
+        }
+        return handleQrFailure(manual, error, epoch);
+      }
+      if (epoch !== qrEpoch) {
         return false;
       }
+      qrNotReadyStreak.value = 0;
       clearFailure("qr");
       if (shouldKeepCurrentQr(qr.value, next)) {
         return false;
@@ -170,6 +211,19 @@ export const useInstanceStore = defineStore("instance", () => {
         qrRefreshing.value = false;
       }
     }
+  }
+
+  function refreshQr(manual = false): Promise<boolean> {
+    if (qrInFlight !== null) {
+      return qrInFlight;
+    }
+    const run = refreshQrNow(manual).finally(() => {
+      if (qrInFlight === run) {
+        qrInFlight = null;
+      }
+    });
+    qrInFlight = run;
+    return run;
   }
 
   async function runAction(
@@ -188,7 +242,7 @@ export const useInstanceStore = defineStore("instance", () => {
 
   async function connect(): Promise<void> {
     await runAction("connect", async () => {
-      const started = await guard(() => connectInstance({}), {
+      const started = await guard(() => connectInstance(), {
         origin: "action",
         action: "connect",
       });

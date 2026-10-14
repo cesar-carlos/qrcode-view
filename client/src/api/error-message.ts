@@ -29,7 +29,7 @@ const detailByCode: Record<string, string> = {
   upstream_unavailable:
     "O Evolution GO está indisponível. Tente de novo em instantes.",
   rate_limited: "Muitas tentativas. Espere um momento e tente de novo.",
-  not_found: "Não encontramos o que foi pedido.",
+  not_found: "Não encontramos esta instância.",
   internal_error: "Ocorreu um erro interno. Tente de novo.",
   invalid_response: "A resposta do servidor veio incompleta.",
   request_failed: "A resposta do servidor não pôde ser lida.",

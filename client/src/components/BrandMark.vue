@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import logoDark from "@/assets/logo-se7e-dark.png";
+import logo from "@/assets/logo-se7e.png";
 
 withDefaults(
   defineProps<{
@@ -11,7 +11,7 @@ withDefaults(
 
 <template>
   <img
-    :src="logoDark"
+    :src="logo"
     alt="Se7e"
     class="shrink-0"
     :class="size === 'sm' ? 'h-10 w-10' : 'h-14 w-14'"

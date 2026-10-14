@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { INSTANCE_EVENTS } from "../../../shared/constants.js";
 
 const phoneSchema = z
   .string()
@@ -9,18 +8,15 @@ const phoneSchema = z
 
 export const connectBodySchema = z.object({
   phone: phoneSchema.optional(),
-  webhookUrl: z.url().max(500).optional(),
-  subscribe: z
-    .array(z.enum(INSTANCE_EVENTS))
-    .max(INSTANCE_EVENTS.length)
-    .optional(),
 });
 
+// 10–11 digits are a Brazilian national number. 12–15 already include a country code.
 const pairingPhoneSchema = z
   .string()
   .trim()
   .transform((value) => value.replace(/\D/g, ""))
-  .pipe(z.string().regex(/^55\d{10,11}$/));
+  .transform((digits) => (/^\d{10,11}$/.test(digits) ? `55${digits}` : digits))
+  .pipe(z.string().regex(/^[1-9]\d{11,14}$/));
 
 export const pairBodySchema = z.object({
   phone: pairingPhoneSchema,

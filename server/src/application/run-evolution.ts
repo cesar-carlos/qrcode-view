@@ -7,6 +7,7 @@ const messageByKind = {
   not_ready: "The instance is not ready for that action yet",
   upstream: "Upstream request failed",
   unavailable: "Evolution GO is unavailable",
+  not_found: "Instance was not found",
 } as const;
 
 const codeByKind = {
@@ -14,6 +15,7 @@ const codeByKind = {
   not_ready: "not_ready",
   upstream: "upstream_error",
   unavailable: "upstream_unavailable",
+  not_found: "not_found",
 } as const satisfies Record<EvolutionRequestError["kind"], AppErrorCode>;
 
 export function mapEvolutionError(error: unknown): {
