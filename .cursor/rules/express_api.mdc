@@ -10,6 +10,7 @@ Mount routers in `app.ts` under `/api/v1`. Route files only register middleware 
 
 Session:
 
+- `GET /api/v1/session` returns `204` without a cookie. With a cookie it checks upstream `GET /instance/status` and returns `{ authenticated: true }` or a mapped error. Never echo the token.
 - `POST /api/v1/session` accepts `{ token }`, checks it with upstream `GET /instance/status`, and sets an `HttpOnly` cookie. The JSON body must not echo the token.
 - `DELETE /api/v1/session` clears the cookie.
 

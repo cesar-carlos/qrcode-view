@@ -13,6 +13,7 @@ export function createSessionRouter(deps: {
   const router = Router();
   const controller = createSessionController(deps);
 
+  router.get("/", controller.current);
   router.post(
     "/",
     createSessionRateLimit(),

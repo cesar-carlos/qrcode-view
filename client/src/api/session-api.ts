@@ -5,6 +5,10 @@ const sessionSchema = z.object({
   authenticated: z.literal(true),
 });
 
+export function getSession(): Promise<{ authenticated: true } | undefined> {
+  return apiRequest(sessionSchema.optional(), "/api/v1/session");
+}
+
 export function openSession(token: string): Promise<{ authenticated: true }> {
   return apiRequest(sessionSchema, "/api/v1/session", {
     method: "POST",

@@ -15,6 +15,7 @@ import ConnectionView from "./ConnectionView.vue";
 import TokenView from "./TokenView.vue";
 
 vi.mock("@/api/session-api", () => ({
+  getSession: vi.fn(async () => ({ authenticated: true })),
   openSession: vi.fn(async () => ({ authenticated: true })),
   closeSession: vi.fn(async () => undefined),
 }));

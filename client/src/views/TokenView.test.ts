@@ -27,7 +27,9 @@ async function mountTokenView() {
 }
 
 vi.mock("@/api/session-api", () => ({
+  getSession: vi.fn(async () => undefined),
   openSession: vi.fn(async () => ({ authenticated: true })),
+  closeSession: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/api/instance-api", () => ({

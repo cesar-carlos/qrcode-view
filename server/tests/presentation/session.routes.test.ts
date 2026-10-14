@@ -71,6 +71,37 @@ describe("POST /api/v1/session", () => {
   });
 });
 
+describe("GET /api/v1/session", () => {
+  it("should return no content when there is no session cookie", async () => {
+    const evolutionClient = fakeEvolutionClient();
+    const getStatus = vi.spyOn(evolutionClient, "getStatus");
+    const app = createApp({ config: testConfig(), evolutionClient });
+    const response = await request(app).get("/api/v1/session");
+
+    expect(response.status).toBe(204);
+    expect(response.body).toEqual({});
+    expect(getStatus).not.toHaveBeenCalled();
+  });
+
+  it("should confirm a cookie session without echoing the token", async () => {
+    const evolutionClient = fakeEvolutionClient();
+    const getStatus = vi.spyOn(evolutionClient, "getStatus");
+    const app = createApp({ config: testConfig(), evolutionClient });
+
+    const response = await request(app)
+      .get("/api/v1/session")
+      .set("Cookie", `instance_session=${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      success: true,
+      data: { authenticated: true },
+    });
+    expect(JSON.stringify(response.body)).not.toContain(token);
+    expect(getStatus).toHaveBeenCalledWith(token);
+  });
+});
+
 describe("DELETE /api/v1/session", () => {
   it("should clear the session cookie", async () => {
     const app = createApp({

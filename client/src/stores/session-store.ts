@@ -1,9 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { ApiError } from "@/api/http";
 import { messageForApiError } from "@/api/error-message";
-import { closeSession, openSession } from "@/api/session-api";
-import { getStatus } from "@/api/instance-api";
+import { closeSession, getSession, openSession } from "@/api/session-api";
 
 export const useSessionStore = defineStore("session", () => {
   const authenticated = ref(false);
@@ -12,13 +10,11 @@ export const useSessionStore = defineStore("session", () => {
 
   async function restore(): Promise<void> {
     try {
-      await getStatus();
-      authenticated.value = true;
+      const session = await getSession();
+      authenticated.value = session?.authenticated === true;
     } catch (error: unknown) {
       authenticated.value = false;
-      if (!(error instanceof ApiError && error.status === 401)) {
-        notice.value = messageForApiError(error, "restore");
-      }
+      notice.value = messageForApiError(error, "restore");
     } finally {
       checked.value = true;
     }

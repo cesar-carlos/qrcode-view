@@ -1,4 +1,5 @@
 import type { CookieOptions, Request, Response } from "express";
+import { getInstanceStatus } from "../../../application/instance/get-instance-status.js";
 import type { EvolutionClient } from "../../../application/ports/evolution-client.js";
 import { openSession } from "../../../application/session/open-session.js";
 import type { AppConfig } from "../../../shared/config/env.js";
@@ -12,6 +13,18 @@ export function createSessionController(deps: {
   evolutionClient: EvolutionClient;
 }) {
   return {
+    current: asyncHandler(async (req: Request, res: Response): Promise<void> => {
+      const token = req.cookies?.[INSTANCE_TOKEN_COOKIE];
+      if (typeof token !== "string" || token.length === 0) {
+        res.status(204).end();
+        return;
+      }
+      const result = await getInstanceStatus(deps.evolutionClient, token);
+      if (!result.success) {
+        throw failureToError(result.error);
+      }
+      res.status(200).json({ success: true, data: { authenticated: true } });
+    }),
     open: asyncHandler(async (_req: Request, res: Response): Promise<void> => {
       const body = getValidatedBody<OpenSessionBody>(res);
       const result = await openSession(deps.evolutionClient, body.token);
